@@ -1,0 +1,654 @@
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcrypt');
+const db = require('../config/database');
+
+// Middleware to check if user is admin
+const checkAdminAuth = (req, res, next) => {
+    if (!req.session.userId || req.session.userRole !== 'admin') {
+        // Clear any existing session
+        req.session.destroy(() => {
+            res.redirect('/admin/login');
+        });
+        return;
+    }
+    next();
+};
+
+// Helper function to fetch user statistics based on the same logic as the table section
+function fetchUserStats(callback) {
+    const statsQuery = `
+        SELECT 
+            COUNT(*) AS totalUsers,
+            SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) AS activeUsers
+        FROM utilisateurs
+        WHERE rôle IN ('client', 'artisan')
+    `;
+    db.query(statsQuery, (err, stats) => {
+        if (err) {
+            console.error('Error fetching stats:', err);
+            return callback(err, { totalUsers: 0, activeUsers: 0 });
+        }
+        callback(null, stats[0]);
+    });
+}
+
+// Admin login page
+router.get('/login', (req, res) => {
+    if (req.session.userRole === 'admin') {
+        return res.redirect('/admin/dashboard');
+    }
+    res.render('admin/login', { title: 'تسجيل الدخول' });
+});
+
+// Admin login handler (AJAX-friendly)
+router.post('/login', (req, res) => {
+    const { email, password } = req.body;
+    const query = 'SELECT * FROM utilisateurs WHERE email = ?';
+    db.query(query, [email], (err, results) => {
+        if (err || results.length === 0) {
+            return res.status(401).json({ success: false, error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
+        }
+        const user = results[0];
+        bcrypt.compare(password, user.mot_de_passe, (err, isMatch) => {
+            if (isMatch) {
+                req.session.userId = user.id;
+                req.session.userRole = user.rôle || user.role;
+                req.session.userName = user.nom;
+                // Set active true on login
+                db.query('UPDATE utilisateurs SET active = TRUE WHERE id = ?', [user.id]);
+                req.session.save(err => {
+                    if (err) {
+                        return res.status(500).json({ success: false, error: 'خطأ في حفظ الجلسة' });
+                    }
+                    // Respond with JSON for AJAX
+                    res.json({ success: true, redirect: '/admin/dashboard' });
+                });
+            } else {
+                res.status(401).json({ success: false, error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
+            }
+        });
+    });
+});
+
+// Admin logout
+router.get('/logout', (req, res) => {
+    const userId = req.session.userId;
+    req.session.destroy(() => {
+        // Set active false on logout
+        if (userId) {
+            db.query('UPDATE utilisateurs SET active = FALSE WHERE id = ?', [userId]);
+        }
+        res.redirect('/admin/login');
+    });
+});
+
+// Client list page
+router.get('/client-list', checkAdminAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id, 
+                u.nom, 
+                u.email, 
+                u.telephone,
+                u.gouvernorat,
+                u.created_at,
+                u.active
+            FROM utilisateurs u
+            WHERE u.rôle = 'client'
+            ORDER BY u.created_at DESC
+        `;
+
+        db.query(query, (err, clients) => {
+            if (err) {
+                console.error('Error fetching clients:', err);
+                return res.render('client-list/index', {
+                    title: 'قائمة المستخدمين',
+                    error: 'حدث خطأ في جلب بيانات المستخدمين',
+                    user: {
+                        id: req.session.userId,
+                        role: req.session.userRole,
+                        name: req.session.userName
+                    }
+                });
+            }
+
+            res.render('client-list/index', {
+                title: 'قائمة المستخدمين',
+                clients: clients,
+                totalClients: clients.length,
+                activeClients: clients.filter(c => c.active).length,
+                user: {
+                    id: req.session.userId,
+                    role: req.session.userRole,
+                    name: req.session.userName
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.render('client-list/index', {
+            title: 'قائمة المستخدمين',
+            error: 'حدث خطأ في النظام',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName
+            }
+        });
+    }
+});
+
+// Artisan list page
+router.get('/artisan-list', checkAdminAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id, 
+                u.nom, 
+                u.email, 
+                u.telephone,
+                u.gouvernorat,
+                u.created_at,
+                u.active,
+                u.métier,
+                (SELECT COUNT(*) FROM ratings r WHERE r.artisan_id = u.id) as total_ratings,
+                (SELECT AVG(rating) FROM ratings r WHERE r.artisan_id = u.id) as avg_rating
+            FROM utilisateurs u
+            WHERE u.rôle = 'artisan'
+            ORDER BY u.created_at DESC
+        `;
+
+        db.query(query, (err, artisans) => {
+            if (err) {
+                console.error('Error fetching artisans:', err);
+                return res.render('artisan-list/index', {
+                    title: 'قائمة الحرفيين',
+                    error: 'حدث خطأ في جلب بيانات الحرفيين',
+                    user: {
+                        id: req.session.userId,
+                        role: req.session.userRole,
+                        name: req.session.userName
+                    }
+                });
+            }
+
+            // Format the ratings
+            artisans = artisans.map(artisan => ({
+                ...artisan,
+                avg_rating: artisan.avg_rating ? parseFloat(artisan.avg_rating).toFixed(1) : '0.0'
+            }));
+
+            res.render('artisan-list/index', {
+                title: 'قائمة الحرفيين',
+                artisans: artisans,
+                totalArtisans: artisans.length,
+                activeArtisans: artisans.filter(a => a.active).length,
+                user: {
+                    id: req.session.userId,
+                    role: req.session.userRole,
+                    name: req.session.userName
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.render('artisan-list/index', {
+            title: 'قائمة الحرفيين',
+            error: 'حدث خطأ في النظام',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName
+            }
+        });
+    }
+});
+
+// View single client
+router.get('/client/:id', checkAdminAuth, (req, res) => {
+    const query = 'SELECT * FROM utilisateurs WHERE id = ? AND rôle = "client"';
+    
+    db.query(query, [req.params.id], (err, results) => {
+        if (err || results.length === 0) {
+            return res.redirect('/admin/client-list');
+        }
+        
+        res.render('admin/client-view', {
+            title: 'تفاصيل المستخدم',
+            client: results[0],
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName
+            }
+        });
+    });
+});
+
+// Delete client
+router.post('/client/:id/delete', checkAdminAuth, (req, res) => {
+    // Only check for the correct spelling in the database
+    const query = `DELETE FROM utilisateurs WHERE id = ? AND rôle = 'client'`;
+        db.query(query, [req.params.id], (err, result) => {
+        if (err) {
+            console.error('Error deleting client:', err);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Error deleting client',
+                details: err.sqlMessage || err.message
+            });
+        }
+        if (result.affectedRows === 0) {
+            // No user was deleted
+            return res.status(404).json({
+                success: false,
+                error: 'لم يتم العثور على المستخدم أو أن الدور غير صحيح'
+            });
+        }
+        res.json({ success: true });
+    });
+});
+
+// Admin dashboard (protected route)
+router.get('/dashboard', checkAdminAuth, (req, res) => {
+    res.render('dashbord/index', {
+        title: 'لوحة التحكم',
+        user: {
+            id: req.session.userId,
+            role: req.session.userRole,
+            name: req.session.userName
+        }
+    });
+});
+
+// Get users data for DataTables
+router.get('/users-data', checkAdminAuth, (req, res) => {
+    const role = req.query.role;
+    console.log('Requested role:', role); // Debug log
+
+    if (role === 'artisan') {
+        const query = `
+            SELECT 
+                u.id, 
+                u.nom, 
+                u.email, 
+                u.gouvernorat,
+                u.telephone,
+                COALESCE(AVG(r.rating), 0) as rating
+            FROM utilisateurs u
+            LEFT JOIN reviews r ON u.id = r.artisan_id
+            WHERE u.rôle = 'artisan'
+            GROUP BY u.id, u.nom, u.email, u.gouvernorat, u.telephone
+            ORDER BY u.id DESC
+        `;
+
+        db.query(query, (err, results) => {
+            if (err) {
+                console.error('Error fetching artisans:', err);
+                return res.status(500).json({ error: 'Error fetching artisans' });
+            }
+            
+            res.json(results);
+        });
+    } else if (role === 'client') {
+        const query = `
+            SELECT id, nom, email, telephone, gouvernorat
+            FROM utilisateurs
+            WHERE rôle = 'client'
+            ORDER BY id DESC
+        `;
+        db.query(query, (err, results) => {
+            if (err) {
+                console.error('Error fetching clients:', err);
+                return res.status(500).json({ error: 'Error fetching clients' });
+            }       
+            console.log('Clients results:', results); // Debug log
+            res.json(results);      
+
+        })
+    }
+    
+    
+    else {
+        const query = `
+            SELECT id, nom, email, telephone, gouvernorat
+            FROM utilisateurs 
+            WHERE rôle = 'client'
+            ORDER BY id DESC
+        `;
+
+        db.query(query, [role], (err, results) => {
+            if (err) {
+                console.error('Error fetching users:', err);
+                return res.status(500).json({ error: 'Error fetching users' });
+            }
+            console.log('Users results:', results); // Debug log
+            res.json(results);
+        });
+    }
+});
+
+// Get total users count (for dynamic dashboard update)
+router.get('/users-count', checkAdminAuth, (req, res) => {
+    const query = "SELECT COUNT(*) AS total FROM utilisateurs WHERE rôle IN ('client', 'artisan', 'admin')";
+    db.query(query, (err, results) => {
+        if (err) {
+            return res.json({ total: 0 });
+        }
+        res.json({ total: results[0].total });
+    });
+});
+
+// Update artisan list route to include statistics
+router.get('/artisan-list', checkAdminAuth, (req, res) => {
+    const statsQuery = `
+        SELECT 
+            COUNT(DISTINCT u.id) as totalArtisans,
+            COUNT(DISTINCT u.id) as activeArtisans,
+            COALESCE(AVG(r.rating), 0) as avgRating
+        FROM utilisateurs u
+        LEFT JOIN reviews r ON u.id = r.artisan_id
+        WHERE u.rôle = 'artisan'
+    `;
+
+    db.query(statsQuery, (err, stats) => {
+        if (err) {
+            console.error('Error fetching stats:', err);
+            return res.render('artisan-list/index', {
+                title: 'قائمة الحرفيين',
+                user: {
+                    id: req.session.userId,
+                    role: req.session.userRole,
+                    name: req.session.userName
+                },
+                totalArtisans: 0,
+                activeArtisans: 0,
+                avgRating: 0
+            });
+        }
+
+        res.render('artisan-list/index', {
+            title: 'قائمة الحرفيين',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName
+            },
+            totalArtisans: stats[0].totalArtisans,
+            activeArtisans: stats[0].activeArtisans,
+            avgRating: parseFloat(stats[0].avgRating || 0).toFixed(1)
+        });
+    });
+});
+
+// Settings page
+router.get('/settings', checkAdminAuth, (req, res) => {
+    const query = 'SELECT nom, email FROM utilisateurs WHERE id = ? AND rôle = "admin"';
+    
+    db.query(query, [req.session.userId], (err, results) => {
+        if (err) {
+            console.error('Error fetching admin data:', err);
+            return res.render('settings/index', {
+                title: 'الإعدادات - TN M3allim',
+                user: {
+                    id: req.session.userId,
+                    role: req.session.userRole,
+                    name: req.session.userName,
+                    email: ''
+                }
+            });
+        }
+
+        res.render('settings/index', {
+            title: 'الإعدادات - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: results[0].nom,
+                email: results[0].email
+            }
+        });
+    });
+});
+
+// Update profile
+router.post('/settings/update-profile', checkAdminAuth, (req, res) => {
+    const { name, email } = req.body;
+    const query = 'UPDATE utilisateurs SET nom = ?, email = ? WHERE id = ? AND rôle = "admin"';
+    
+    db.query(query, [name, email, req.session.userId], (err, result) => {
+        if (err) {
+            console.error('Error updating admin profile:', err);
+            return res.status(500).json({ error: 'حدث خطأ في تحديث البيانات' });
+        }
+        
+        // Update session
+        req.session.userName = name;
+        res.json({ success: true });
+    });
+});
+
+// Change password
+router.post('/settings/change-password', checkAdminAuth, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        
+        // Get current password hash
+        const query = 'SELECT mot_de_passe FROM utilisateurs WHERE id = ? AND rôle = "admin"';
+        db.query(query, [req.session.userId], async (err, results) => {
+            if (err || results.length === 0) {
+                return res.status(500).json({ error: 'حدث خطأ في التحقق من كلمة المرور' });
+            }
+
+            const isValid = await bcrypt.compare(currentPassword, results[0].mot_de_passe);
+            if (!isValid) {
+                return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+            }
+
+            // Hash new password
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            
+            // Update password
+            const updateQuery = 'UPDATE utilisateurs SET mot_de_passe = ? WHERE id = ? AND rôle = "admin"';
+            db.query(updateQuery, [hashedPassword, req.session.userId], (err, result) => {
+                if (err) {
+                    return res.status(500).json({ error: 'حدث خطأ في تحديث كلمة المرور' });
+                }
+                res.json({ success: true });
+            });
+        });
+    } catch (error) {
+        console.error('Password update error:', error);
+        res.status(500).json({ error: 'حدث خطأ في تحديث كلمة المرور' });
+    }
+});
+
+// User Messages route - update the path
+router.get('/user-messages', checkAdminAuth, async (req, res) => {
+    try {
+        const query = 'SELECT id, nom, email, num_tel as phone, message, DATE_FORMAT(created_at, "%Y-%m-%d %H:%i") as created_at FROM enquete ORDER BY created_at DESC';
+        db.query(query, (err, results) => {
+            if (err) {
+                console.error('Error fetching enquete messages:', err);
+                return res.render('user-messages/index', {
+                    title: 'رسائل الاستبيان',
+                    messages: [],
+                    totalMessages: 0,
+                    error: 'حدث خطأ أثناء جلب رسائل الاستبيان'
+                });
+            }
+            res.render('user-messages/index', {
+                title: 'رسائل الاستبيان',
+                messages: results,
+                totalMessages: results.length,
+                user: {
+                    id: req.session.userId,
+                    role: req.session.userRole,
+                    name: req.session.userName
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.render('user-messages/index', {
+            title: 'رسائل الاستبيان',
+            messages: [],
+            totalMessages: 0,
+            error: 'حدث خطأ في النظام'
+        });
+    }
+});
+
+// Update delete message route path
+router.delete('/user-messages/:id', checkAdminAuth, (req, res) => {
+    const query = 'DELETE FROM contacts WHERE id = ?';  // Changed from 'messages' to 'contacts'
+    
+    db.query(query, [req.params.id], (err, result) => {
+        if (err) {
+            console.error('Error deleting message:', err);
+            return res.status(500).json({ error: 'Error deleting message' });
+        }
+        res.json({ success: true });
+    });
+});
+
+// Route to fetch all enquete messages for admin user-messages page
+router.get('/user-messages/enquete', checkAdminAuth, (req, res) => {
+    const query = 'SELECT id, nom, email, num_tel, message, created_at FROM enquete ORDER BY created_at DESC';
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Error fetching enquete messages:', err);
+            return res.render('user-messages/index', {
+                title: 'رسائل الاستبيان',
+                enqueteMessages: [],
+                totalMessages: 0,
+                error: 'حدث خطأ أثناء جلب رسائل الاستبيان'
+            });
+        }
+        res.render('user-messages/index', {
+            title: 'رسائل الاستبيان',
+            enqueteMessages: results,
+            totalMessages: results.length
+        });
+    });
+});
+
+// Route to fetch all messages from both enquete and contacts tables for admin user-messages page
+router.get('/user-messages/all', checkAdminAuth, (req, res) => {
+    // Fetch from both enquete and contacts
+    const enqueteQuery = 'SELECT id, nom, email, num_tel as phone, message, created_at FROM enquete';
+    const contactsQuery = 'SELECT id, name as nom, email, phone, message, created_at FROM contacts';
+    
+    db.query(enqueteQuery, (err, enqueteResults) => {
+        if (err) {
+            console.error('Error fetching enquete messages:', err);
+            return res.render('user-messages/index', {
+                title: 'رسائل المستخدمين',
+                messages: [],
+                totalMessages: 0,
+                error: 'حدث خطأ أثناء جلب رسائل الاستبيان'
+            });
+        }
+        db.query(contactsQuery, (err2, contactsResults) => {
+            if (err2) {
+                console.error('Error fetching contact messages:', err2);
+                return res.render('user-messages/index', {
+                    title: 'رسائل المستخدمين',
+                    messages: enqueteResults,
+                    totalMessages: enqueteResults.length,
+                    error: 'حدث خطأ أثناء جلب رسائل التواصل'
+                });
+            }
+            // Merge both arrays
+            const allMessages = [...enqueteResults, ...contactsResults].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            res.render('user-messages/index', {
+                title: 'رسائل المستخدمين',
+                messages: allMessages,
+                totalMessages: allMessages.length
+            });
+        });
+    });
+});
+
+// Route to fetch only enquete messages for admin user-messages page (and pass as 'messages')
+router.get('/user-messages/enquete-messages', checkAdminAuth, (req, res) => {
+    const query = 'SELECT id, nom, email, num_tel as phone, message, created_at FROM enquete ORDER BY created_at DESC';
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Error fetching enquete messages:', err);
+            return res.render('user-messages/index', {
+                title: 'رسائل الاستبيان',
+                messages: [],
+                totalMessages: 0,
+                error: 'حدث خطأ أثناء جلب رسائل الاستبيان'
+            });
+        }
+        res.render('user-messages/index', {
+            title: 'رسائل الاستبيان',
+            messages: results,
+            totalMessages: results.length
+        });
+    });
+});
+
+// Route to handle user creation by admin (client, artisan, admin)
+router.post('/create-user', checkAdminAuth, (req, res) => {
+    const { nom, email, mot_de_passe, rôle } = req.body;
+    if (!nom || !email || !mot_de_passe || !rôle) {
+        return res.status(400).json({ success: false, error: 'يرجى ملء جميع الحقول المطلوبة' });
+    }
+    db.query('SELECT * FROM utilisateurs WHERE email = ?', [email], (err, results) => {
+        if (err) {
+            console.error('Error checking email existence:', err);
+            return res.status(500).json({ success: false, error: 'حدث خطأ أثناء التحقق من البريد الإلكتروني' });
+        }
+        if (results.length > 0) {
+            return res.status(409).json({ success: false, error: 'البريد الإلكتروني مستخدم بالفعل' });
+        }
+        const bcrypt = require('bcrypt');
+        bcrypt.hash(mot_de_passe, 10, (err, hash) => {
+            if (err) {
+                console.error('Error hashing password:', err);
+                return res.status(500).json({ success: false, error: 'حدث خطأ أثناء معالجة كلمة المرور' });
+            }
+            const insertQuery = `INSERT INTO utilisateurs (nom, email, mot_de_passe, rôle, active) VALUES (?, ?, ?, ?, TRUE)`;
+            db.query(insertQuery, [nom, email, hash, rôle], (err, result) => {
+                if (err) {
+                    console.error('Database error (insert user):', err);
+                    return res.status(500).json({ success: false, error: 'خطأ في قاعدة البيانات (إضافة المستخدم): ' + err.message });
+                }
+                res.json({ success: true });
+            });
+        });
+    });
+});
+
+// TEMPORARY ROUTE: Add 'actif' column to utilisateurs table if it doesn't exist
+router.get('/add-actif-column', checkAdminAuth, (req, res) => {
+    const alterQuery = `ALTER TABLE utilisateurs ADD COLUMN actif TINYINT(1) DEFAULT 1`;
+    db.query(alterQuery, (err, result) => {
+        if (err) {
+            if (err.code === 'ER_DUP_FIELDNAME') {
+                return res.send("'actif' column already exists.");
+            }
+            console.error('Error adding actif column:', err);
+            return res.send('Error adding actif column: ' + err.message);
+        }
+        res.send("'actif' column added successfully!");
+    });
+});
+
+// TEMPORARY ROUTE: Activate all users (for dashboard testing)
+router.get('/activate-all-users', checkAdminAuth, (req, res) => {
+    db.query("UPDATE utilisateurs SET actif = 1 WHERE rôle IN ('client', 'artisan', 'admin')", (err, result) => {
+        if (err) {
+            console.error('Activation error:', err);
+            return res.send('Error activating users: ' + err.message);
+        }
+        res.send('All users activated!');
+    });
+});
+
+module.exports = router;
