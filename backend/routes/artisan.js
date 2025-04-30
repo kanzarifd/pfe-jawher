@@ -347,6 +347,45 @@ router.get('/reviews/data', checkArtisanAuth, (req, res) => {
     });
 });
 
+// Get unique artisan locations
+router.get('/get-locations', (req, res) => {
+    const query = `
+        SELECT DISTINCT 
+            u.gouvernorat,
+            u.ville,
+            u.adresse
+        FROM utilisateurs u
+        JOIN artisans a ON u.id = a.utilisateur_id
+        WHERE u.rôle = 'artisan'
+        ORDER BY u.gouvernorat, u.ville
+    `;
+    
+    db.query(query, (err, results) => {
+        if (err) {
+            console.error('Error fetching locations:', err);
+            return res.status(500).json({ error: 'Error fetching locations' });
+        }
+
+        // Group locations by governorate
+        const locations = {};
+        results.forEach(row => {
+            if (!locations[row.gouvernorat]) {
+                locations[row.gouvernorat] = new Set();
+            }
+            if (row.ville) {
+                locations[row.gouvernorat].add(row.ville);
+            }
+        });
+
+        // Convert Sets to arrays
+        Object.keys(locations).forEach(gov => {
+            locations[gov] = Array.from(locations[gov]);
+        });
+
+        res.json(locations);
+    });
+});
+
 // Route for artisan list page (admin view)
 router.get('/list', (req, res) => {
     const query = `

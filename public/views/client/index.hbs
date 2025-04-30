@@ -160,40 +160,46 @@
                         </select>
                     </div>
 
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">التقييم</label>
-                            <div class="flex items-center gap-2">
-                                <input type="radio" name="rating" id="rating-all" checked>
-                                <label for="rating-all">الكل</label>
-                                <input type="radio" name="rating" id="rating-4plus">
-                                <label for="rating-4plus">4+ نجوم</label>
-                                <input type="radio" name="rating" id="rating-3plus">
-                                <label for="rating-3plus">3+ نجوم</label>
+                    <div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">التقييم</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="radio" name="rating" id="rating-all" checked>
+                                    <label for="rating-all">الكل</label>
+                                    <input type="radio" name="rating" id="rating-4plus">
+                                    <label for="rating-4plus">4+ نجوم</label>
+                                    <input type="radio" name="rating" id="rating-3plus">
+                                    <label for="rating-3plus">3+ نجوم</label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
+                                <div class="flex items-center gap-4">
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" id="available-now" class="form-checkbox text-yellow-500">
+                                        <span>متاح حالياً</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" id="unavailable" class="form-checkbox text-yellow-500">
+                                        <span>غير متاح</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="checkbox" id="service-24-7" class="form-checkbox text-yellow-500">
+                                        <span>خدمة 24/7</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
-                            <div class="flex items-center gap-4">
-                                <label class="flex items-center gap-2">
-                                    <input type="checkbox" class="form-checkbox text-yellow-500">
-                                    <span>متاح حالياً</span>
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input type="checkbox" class="form-checkbox text-yellow-500">
-                                    <span>خدمة 24/7</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex justify-end mt-6">
-                     <button onclick="resetFilters()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors mr-2">
+                        <div class="flex justify-end mt-6">
+                             <button onclick="resetFilters()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors mr-2">
         إعادة تعيين
     </button>
-                       <button onclick="applyFilters()" class="bg-yellow-500 text-white px-6 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
+                               <button onclick="applyFilters()" class="bg-yellow-500 text-white px-6 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
         تطبيق التصفية
     </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -257,7 +263,7 @@
                                 <i class="fas fa-map-marker-alt mr-2"></i>
                                 <span>{{this.localisation}}</span>
                             </div>
-                            <button onclick="showArtisanProfile({{this.id}})" 
+                            <button onclick="checkAvailabilityAndShow({{this.id}}, {{this.disponibilité}})" 
                                     class="w-full bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition duration-300">
                                 عرض التفاصيل
                             </button>
@@ -310,7 +316,7 @@
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
-                                    <button onclick="showArtisanProfile({{this.id}})" class="text-yellow-600 hover:text-yellow-900">عرض التفاصيل</button>
+                                    <button onclick="checkAvailabilityAndShow({{this.id}}, {{this.disponibilité}})" class="text-yellow-600 hover:text-yellow-900">عرض التفاصيل</button>
                                 </td>
                             </tr>
                             {{/each}}
@@ -595,7 +601,6 @@
                     <!-- Reviews will be loaded here dynamically -->
                 </div>
             </div>
-        </div>
     </div>
                     </div>
                 </div>
@@ -888,7 +893,9 @@
         const searchTerm = document.getElementById('searchInput').value.toLowerCase();
         const selectedHobby = document.getElementById('hobby').value;
         const rating = document.querySelector('input[name="rating"]:checked').id;
-        const isAvailableOnly = document.querySelector('input[type="checkbox"]').checked;
+        const isAvailableOnly = document.getElementById('available-now').checked;
+        const isUnavailableOnly = document.getElementById('unavailable').checked;
+        const is24_7Only = document.getElementById('service-24-7').checked;
         
         filteredArtisans = artisans.filter(artisan => {
             // Search term filter
@@ -909,7 +916,20 @@
             }
 
             // Availability filter
-            const matchesAvailability = !isAvailableOnly || artisan.disponibilité;
+            let matchesAvailability = true;
+            if (isAvailableOnly && isUnavailableOnly) {
+                // If both are checked, show all
+                matchesAvailability = true;
+            } else if (isAvailableOnly) {
+                matchesAvailability = artisan.disponibilité === true;
+            } else if (isUnavailableOnly) {
+                matchesAvailability = artisan.disponibilité === false;
+            }
+
+            // 24/7 service filter (independent of availability)
+            if (is24_7Only) {
+                matchesAvailability = matchesAvailability && artisan.service24_7;
+            }
 
             return matchesSearch && matchesHobby && matchesRating && matchesAvailability;
         });
@@ -934,9 +954,9 @@
         document.getElementById('rating-all').checked = true;
         
         // Reset checkboxes
-        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            checkbox.checked = false;
-        });
+        document.getElementById('available-now').checked = false;
+        document.getElementById('unavailable').checked = false;
+        document.getElementById('service-24-7').checked = false;
 
         // Reset the filtered list
         filteredArtisans = [...artisans];
@@ -987,7 +1007,7 @@
                             <i class="fas fa-map-marker-alt mr-2"></i>
                             <span>${artisan.localisation}</span>
                         </div>
-                        <button onclick="showArtisanProfile(${artisan.id})" 
+                        <button onclick="checkAvailabilityAndShow(${artisan.id}, ${artisan.disponibilité})" 
                                 class="w-full bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition duration-300">
                             عرض التفاصيل
                         </button>
@@ -1023,7 +1043,7 @@
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
-                        <button onclick="showArtisanProfile(${artisan.id})" class="text-yellow-600 hover:text-yellow-900">عرض التفاصيل</button>
+                        <button onclick="checkAvailabilityAndShow(${artisan.id}, ${artisan.disponibilité})" class="text-yellow-600 hover:text-yellow-900">عرض التفاصيل</button>
                     </td>
                 </tr>
             `;
@@ -1052,4 +1072,18 @@
     document.addEventListener('DOMContentLoaded', () => {
         updateDisplay();
     });
+</script>
+<script>
+    function checkAvailabilityAndShow(artisanId, disponibilite) {
+        if (!disponibilite) {
+            Swal.fire({
+                title: 'غير متاح',
+                text: 'عذراً، هذا الحرفي غير متاح حالياً للحجز',
+                icon: 'warning',
+                confirmButtonText: 'حسناً'
+            });
+            return;
+        }
+        showArtisanProfile(artisanId);
+    }
 </script>
