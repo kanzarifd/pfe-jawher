@@ -76,7 +76,7 @@
                         </div>
                         <div class="mr-4">
                             <h3 class="text-lg font-semibold text-slate-800">الخدمات المقدمة</h3>
-                            <p class="text-3xl font-bold text-blue-600">{{stats.services}}</p>
+                            <p class="text-3xl font-bold text-blue-600" id="services_Count">-</p>
                         </div>
                     </div>
                 </div>
@@ -88,7 +88,19 @@
                         </div>
                         <div class="mr-4">
                             <h3 class="text-lg font-semibold text-slate-800">التقييمات</h3>
-                            <p class="text-3xl font-bold text-green-600">{{stats.rating}}</p>
+                            <p class="text-3xl font-bold text-green-600" id="reviewsCount">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-card bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-red-100 rounded-full">
+                            <i class="fas fa-users text-red-600"></i>
+                        </div>
+                        <div class="mr-4">
+                            <h3 class="text-lg font-semibold text-slate-800">العملاء</h3>
+                            <p class="text-3xl font-bold text-red-600" id="clientsCount">-</p>
                         </div>
                     </div>
                 </div>
@@ -96,28 +108,16 @@
                 <div class="dashboard-card bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                     <div class="flex items-center">
                         <div class="p-3 bg-yellow-100 rounded-full">
-                            <i class="fas fa-users text-yellow-600"></i>
-                        </div>
-                        <div class="mr-4">
-                            <h3 class="text-lg font-semibold text-slate-800">العملاء</h3>
-                            <p class="text-3xl font-bold text-yellow-600">{{stats.clients}}</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="dashboard-card bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                    <div class="flex items-center">
-                        <div class="p-3 bg-purple-100 rounded-full">
-                            <i class="fas fa-calendar-check text-purple-600"></i>
+                            <i class="fas fa-calendar-check text-yellow-600"></i>
                         </div>
                         <div class="mr-4">
                             <h3 class="text-lg font-semibold text-slate-800">المواعيد</h3>
-                            <p class="text-3xl font-bold text-purple-600">{{stats.appointments}}</p>
+                            <p class="text-3xl font-bold text-yellow-600" id="appointmentsCount">-</p>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Recent Activities -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-8">
                 <h3 class="text-lg font-semibold text-slate-800 mb-4">آخر النشاطات</h3>
@@ -127,22 +127,20 @@
                             {{#if (eq this.type "review")}}
                             <div class="flex items-start p-3 border-r-4 border-blue-500 bg-blue-50 rounded-lg">
                                 <div class="p-2 bg-blue-100 rounded-full ml-4">
-                                    <i class="fas fa-comment text-blue-600"></i>
+                                    <i class="fas fa-star text-blue-600"></i>
                                 </div>
                                 <div>
-                                    <h4 class="font-medium">تقييم جديد</h4>
-                                    <p class="text-sm text-gray-600">قام {{this.user_name}} بإضافة تقييم {{this.rating}} نجوم {{#if this.text}}({{this.text}}){{/if}}</p>
+                                    <p class="text-slate-800">تم إضافة تقييم جديد</p>
                                     <p class="text-xs text-gray-500 mt-1">{{formatDate this.created_at}}</p>
                                 </div>
                             </div>
                             {{else if (eq this.type "booking")}}
                             <div class="flex items-start p-3 border-r-4 border-yellow-500 bg-yellow-50 rounded-lg">
                                 <div class="p-2 bg-yellow-100 rounded-full ml-4">
-                                    <i class="fas fa-calendar text-yellow-600"></i>
+                                    <i class="fas fa-calendar-check text-yellow-600"></i>
                                 </div>
                                 <div>
-                                    <h4 class="font-medium">موعد جديد</h4>
-                                    <p class="text-sm text-gray-600">تم حجز موعد جديد من {{this.user_name}} {{#if this.text}}({{this.text}}){{/if}}</p>
+                                    <p class="text-slate-800">تم حجز موعد جديد</p>
                                     <p class="text-xs text-gray-500 mt-1">{{formatDate this.created_at}}</p>
                                 </div>
                             </div>
@@ -158,7 +156,7 @@
             <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
                 <h2 class="text-2xl font-bold text-slate-800 mb-6">عن TN M3allim</h2>
                 <p class="text-slate-600 leading-relaxed">
-                    مهمتنا الأساسية في TN M3allim تكمن في ربط الحرفيين ذوي الخبرة العالية بالأفراد الذين يحتاجون إلى
+                    منصة TN M3allim هي منصة تونسية تهدف إلى ربط الحرفيين بالزبائن بطريقة سهلة وفعالة. نحن نوفر منصة احترافية تمكن الحرفيين من عرض
                     مهاراتهم. نحن نؤمن و نثق في مهارة حرفيينا في الوطن العربي وتأثيرها في خلق عمل ذو جودة عالية يشهد بها
                     الزبون نفسه.
                 </p>
@@ -181,67 +179,24 @@
     </div>
 
     <script>
-        // Initialize charts
-        document.addEventListener('DOMContentLoaded', function() {
-            // Services Chart
-            const servicesCtx = document.getElementById('servicesChart').getContext('2d');
-            const servicesChart = new Chart(servicesCtx, {
-                type: 'bar',
-                data: {
-                    labels: {{{json chartData.months}}},
-                    datasets: [{
-                        label: 'عدد الخدمات',
-                        data: {{{json chartData.bookings}}},
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-            
-            // Ratings Chart
-            const ratingsCtx = document.getElementById('ratingsChart').getContext('2d');
-            const ratingsChart = new Chart(ratingsCtx, {
-                type: 'line',
-                data: {
-                    labels: {{{json chartData.months}}},
-                    datasets: [{
-                        label: 'متوسط التقييم',
-                        data: {{{json chartData.ratings}}},
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            min: 0,
-                            max: 5
-                        }
-                    }
-                }
-            });
-        });
+        // Fetch and display statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/artisan/stats');
+                const data = await response.json();
+                
+                // Update the stats
+                document.getElementById('services_Count').textContent = data.services;
+                document.getElementById('reviewsCount').textContent = data.reviews;
+                document.getElementById('clientsCount').textContent = data.total_bookings;
+                document.getElementById('appointmentsCount').textContent = data.appointments;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load stats when page loads
+        document.addEventListener('DOMContentLoaded', loadStats);
         
         function logout() {
             fetch('/logout', {

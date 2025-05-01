@@ -18,7 +18,7 @@ router.get('/', checkArtisanAuth, (req, res) => {  // Changed from checkArtisanR
 // Get artisan data
 router.get('/get-artisans', (req, res) => {
     const query = `
-        SELECT a.*, u.nom, u.email, u.photo_profile,
+        SELECT a.*, u.nom, u.email, u.photo_profile, u.gouvernorat, u.ville,
         COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
         COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
         FROM artisans a 
@@ -352,10 +352,8 @@ router.get('/get-locations', (req, res) => {
     const query = `
         SELECT DISTINCT 
             u.gouvernorat,
-            u.ville,
-            u.adresse
+            u.ville
         FROM utilisateurs u
-        JOIN artisans a ON u.id = a.utilisateur_id
         WHERE u.rôle = 'artisan'
         ORDER BY u.gouvernorat, u.ville
     `;
@@ -370,16 +368,11 @@ router.get('/get-locations', (req, res) => {
         const locations = {};
         results.forEach(row => {
             if (!locations[row.gouvernorat]) {
-                locations[row.gouvernorat] = new Set();
+                locations[row.gouvernorat] = [];
             }
             if (row.ville) {
-                locations[row.gouvernorat].add(row.ville);
+                locations[row.gouvernorat].push(row.ville);
             }
-        });
-
-        // Convert Sets to arrays
-        Object.keys(locations).forEach(gov => {
-            locations[gov] = Array.from(locations[gov]);
         });
 
         res.json(locations);
@@ -404,6 +397,49 @@ router.get('/list', (req, res) => {
             activeArtisans: results[0].activeArtisans || 0
         });
     });
+});
+
+// Get artisan statistics
+router.get('/stats', checkArtisanAuth, async (req, res) => {
+    try {
+        // First get artisan_id
+        const getArtisanIdQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        const [artisanResult] = await db.promise().query(getArtisanIdQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+        
+        const artisanId = artisanResult[0].id;
+        
+        // Get all stats in a single query
+        const statsQuery = `
+            SELECT 
+                1 as services,
+                COALESCE(AVG(r.rating), 0) as rating,
+                COUNT(DISTINCT r.id) as reviews,
+                COUNT(DISTINCT b.id) as appointments,
+                COUNT(b.id) as total_bookings
+            FROM artisans a
+            LEFT JOIN reviews r ON r.artisan_id = a.id
+            LEFT JOIN bookings b ON b.artisan_id = a.id
+            WHERE a.id = ?
+        `;
+        
+        const [stats] = await db.promise().query(statsQuery, [artisanId]);
+        
+        res.json({
+            services: stats[0].services || 0,
+            rating: parseFloat(stats[0].rating) || 0,
+            reviews: stats[0].reviews || 0,
+            appointments: stats[0].appointments || 0,
+            total_bookings: stats[0].total_bookings || 0
+        });
+        
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 module.exports = router;
