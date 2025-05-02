@@ -103,15 +103,16 @@
                         <label for="country" class="block text-sm font-medium text-gray-700 mb-2">الدولة</label>
                         <select class="country w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" id="country">
                             <option value="">اختر الدولة</option>
+                            <option value="tunisia" selected>تونس</option>
                         </select>
 
                         <label for="state" class="block text-sm font-medium text-gray-700 mt-4 mb-2">الولاية</label>
-                        <select class="state w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" id="state" disabled>
+                        <select class="state w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" id="state">
                             <option value="">اختر الولاية</option>
                         </select>
 
                         <label for="city" class="block text-sm font-medium text-gray-700 mt-4 mb-2">المدينة</label>
-                        <select class="city w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" id="city" disabled>
+                        <select class="city w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" id="city">
                             <option value="">اختر المدينة</option>
                         </select>
                     </div>
@@ -211,13 +212,55 @@
             }
         </script>
 
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const stateSelect = document.getElementById('state');
+                const citySelect = document.getElementById('city');
 
+                // Fetch locations from the server
+                fetch('/artisan/get-locations')
+                    .then(response => response.json())
+                    .then(locations => {
+                        // Populate governorates
+                        Object.keys(locations).forEach(gov => {
+                            if (gov) {
+                                const option = document.createElement('option');
+                                option.value = gov;
+                                option.textContent = gov;
+                                stateSelect.appendChild(option);
+                            }
+                        });
 
-       
+                        // State change handler
+                        stateSelect.addEventListener('change', function() {
+                            const selectedState = this.value;
+                            citySelect.innerHTML = '<option value="">اختر المدينة</option>';
+                            
+                            if (selectedState && locations[selectedState]) {
+                                // Populate cities
+                                locations[selectedState].forEach(city => {
+                                    if (city) {
+                                        const option = document.createElement('option');
+                                        option.value = city;
+                                        option.textContent = city;
+                                        citySelect.appendChild(option);
+                                    }
+                                });
+                                citySelect.disabled = false;
+                            } else {
+                                citySelect.disabled = true;
+                            }
+                            applyFilters();
+                        });
 
-
-
-        
+                        // City change handler
+                        citySelect.addEventListener('change', applyFilters);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching locations:', error);
+                    });
+            });
+        </script>
 
         <!-- Keep and modify this container -->
         <div class="max-w-7xl mx-auto px-4 py-8">
@@ -896,6 +939,8 @@
         const isAvailableOnly = document.getElementById('available-now').checked;
         const isUnavailableOnly = document.getElementById('unavailable').checked;
         const is24_7Only = document.getElementById('service-24-7').checked;
+        const selectedState = document.getElementById('state').value;
+        const selectedCity = document.getElementById('city').value;
         
         filteredArtisans = artisans.filter(artisan => {
             // Search term filter
@@ -931,7 +976,16 @@
                 matchesAvailability = matchesAvailability && artisan.service24_7;
             }
 
-            return matchesSearch && matchesHobby && matchesRating && matchesAvailability;
+            // Location filter
+            let matchesLocation = true;
+            if (selectedState) {
+                matchesLocation = artisan.gouvernorat === selectedState;
+            }
+            if (selectedCity && matchesLocation) {
+                matchesLocation = artisan.ville === selectedCity;
+            }
+
+            return matchesSearch && matchesHobby && matchesRating && matchesAvailability && matchesLocation;
         });
 
         // Reset pagination
@@ -957,6 +1011,10 @@
         document.getElementById('available-now').checked = false;
         document.getElementById('unavailable').checked = false;
         document.getElementById('service-24-7').checked = false;
+
+        // Reset location selects
+        document.getElementById('state').value = '';
+        document.getElementById('city').value = '';
 
         // Reset the filtered list
         filteredArtisans = [...artisans];

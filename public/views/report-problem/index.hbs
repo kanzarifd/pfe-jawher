@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="/img/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-slate-50 flex">
@@ -95,6 +96,16 @@
     document.getElementById('reportForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        
+        // Show loading state
+        Swal.fire({
+            title: 'جاري الإرسال...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
         try {
             const response = await fetch('/artisan/report-problem', {
                 method: 'POST',
@@ -104,13 +115,39 @@
                 body: JSON.stringify(Object.fromEntries(formData))
             });
             const data = await response.json();
+            
             if (data.success) {
-                alert('تم إرسال تقريرك بنجاح!');
-               
+                // Show success message
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم إرسال تقريرك بنجاح!',
+                    text: 'شكراً لمساعدتنا في تحسين خدماتنا',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#EAB308'
+                }).then(() => {
+                    // Reset form after successful submission
+                    e.target.reset();
+                });
+            } else {
+                // Show error message
+                Swal.fire({
+                    icon: 'error',
+                    title: 'حدث خطأ!',
+                    text: data.message || 'حدث خطأ أثناء إرسال التقرير',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#EAB308'
+                });
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('حدث خطأ أثناء إرسال التقرير');
+            // Show error message
+            Swal.fire({
+                icon: 'error',
+                title: 'حدث خطأ!',
+                text: 'حدث خطأ أثناء إرسال التقرير',
+                confirmButtonText: 'حسناً',
+                confirmButtonColor: '#EAB308'
+            });
         }
     });
     </script>

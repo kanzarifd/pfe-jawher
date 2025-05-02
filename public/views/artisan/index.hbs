@@ -56,11 +56,22 @@
                     <p class="text-slate-600">نتمنى لك يوماً مثمراً</p>
                 </div>
                 <div class="flex space-x-4 space-x-reverse">
-                    <button class="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 flex items-center">
-                        <i class="fas fa-bell text-yellow-500 ml-2"></i>
-                        <span class="text-sm">الإشعارات</span>
-                    </button>
-                    <button class="px-4 py-2 bg-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 flex items-center">
+                    <div class="relative">
+                        <button onclick="toggleNotifications(event)" class="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 flex items-center">
+                            <i class="fas fa-bell text-yellow-500 ml-2"></i>
+                            <span class="text-sm">الإشعارات</span>
+                            <span id="notificationCount" class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                        </button>
+                        <div id="notificationsDropdown" class="hidden absolute z-50 mt-2 w-96 bg-white rounded-lg shadow-lg right-0 max-h-96 overflow-y-auto border border-gray-200">
+                            <div class="p-4">
+                                <h3 class="text-slate-800 font-semibold mb-3">الإشعارات الجديدة</h3>
+                                <div id="notificationsList" class="space-y-3">
+                                    <!-- Notifications will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="openServiceModal()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 flex items-center">
                         <i class="fas fa-plus ml-2"></i>
                         <span class="text-sm">إضافة خدمة</span>
                     </button>
@@ -99,7 +110,7 @@
                             <i class="fas fa-users text-red-600"></i>
                         </div>
                         <div class="mr-4">
-                            <h3 class="text-lg font-semibold text-slate-800">العملاء</h3>
+                            <h3 class="text-lg font-semibold text-slate-800">العملاء المميزين</h3>
                             <p class="text-3xl font-bold text-red-600" id="clientsCount">-</p>
                         </div>
                     </div>
@@ -112,43 +123,25 @@
                         </div>
                         <div class="mr-4">
                             <h3 class="text-lg font-semibold text-slate-800">المواعيد</h3>
-                            <p class="text-3xl font-bold text-yellow-600" id="appointmentsCount">-</p>
+                            <div class="flex items-center gap-2">
+                                <p class="text-3xl font-bold text-yellow-600" id="appointmentsCount">-</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Recent Activities -->
+             <!-- Recent Activities -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-8">
-                <h3 class="text-lg font-semibold text-slate-800 mb-4">آخر النشاطات</h3>
-                <div class="space-y-4">
-                    {{#if activities.length}}
-                        {{#each activities}}
-                            {{#if (eq this.type "review")}}
-                            <div class="flex items-start p-3 border-r-4 border-blue-500 bg-blue-50 rounded-lg">
-                                <div class="p-2 bg-blue-100 rounded-full ml-4">
-                                    <i class="fas fa-star text-blue-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-slate-800">تم إضافة تقييم جديد</p>
-                                    <p class="text-xs text-gray-500 mt-1">{{formatDate this.created_at}}</p>
-                                </div>
-                            </div>
-                            {{else if (eq this.type "booking")}}
-                            <div class="flex items-start p-3 border-r-4 border-yellow-500 bg-yellow-50 rounded-lg">
-                                <div class="p-2 bg-yellow-100 rounded-full ml-4">
-                                    <i class="fas fa-calendar-check text-yellow-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-slate-800">تم حجز موعد جديد</p>
-                                    <p class="text-xs text-gray-500 mt-1">{{formatDate this.created_at}}</p>
-                                </div>
-                            </div>
-                            {{/if}}
-                        {{/each}}
-                    {{else}}
-                        <p class="text-center text-gray-500 py-4">لا توجد نشاطات حديثة</p>
-                    {{/if}}
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-semibold text-slate-800">آخر النشاطات</h3>
+                    <div class="flex gap-2">
+                        <button onclick="loadActivities()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                            <i class="fas fa-sync-alt text-gray-600"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-4" id="activitiesList">
                 </div>
             </div>
 
@@ -161,11 +154,11 @@
                     الزبون نفسه.
                 </p>
                 <div class="mt-6 flex flex-wrap gap-4">
-                    <button class="px-6 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors flex items-center">
+                    <a href="/profile" class="px-6 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors flex items-center">
                         <i class="fas fa-user-edit ml-2"></i>
                         تحديث الملف الشخصي
-                    </button>
-                    <button class="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center">
+                    </a>
+                    <button onclick="openServiceModal()" class="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center">
                         <i class="fas fa-plus-circle ml-2"></i>
                         إضافة خدمة جديدة
                     </button>
@@ -178,7 +171,257 @@
         </main>
     </div>
 
+    <!-- Service Modal -->
+    <div id="serviceModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-slate-800">إضافة خدمة جديدة</h3>
+                <button onclick="closeServiceModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="serviceForm" onsubmit="submitService(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">نوع الخدمة</label>
+                    <select id="serviceType" name="serviceType" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
+                        <option value="">اختر نوع الخدمة</option>
+                        <option value="plumber">سباكة</option>
+                        <option value="electrician">كهرباء</option>
+                        <option value="carpenter">نجارة</option>
+                        <option value="painter">دهان</option>
+                        <option value="cleaner">تنظيف</option>
+                        <option value="gardener">بستنة</option>
+                        <option value="ac_repair">تصليح مكيفات</option>
+                        <option value="appliance_repair">تصليح أجهزة منزلية</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">التخصص الدقيق</label>
+                    <input type="text" id="specialty" name="specialty" required
+                           class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                           placeholder="مثال: تركيب حنفيات، إصلاح تسريبات">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">السعر بالساعة (د.ت)</label>
+                    <input type="number" id="hourlyRate" name="hourlyRate" required min="0" step="0.1"
+                           class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                           placeholder="أدخل السعر بالساعة">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
+                    <textarea id="description" name="description" required
+                           class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 h-24"
+                           placeholder="اكتب وصفاً مختصراً لخدماتك وخبراتك"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" onclick="closeServiceModal()"
+                            class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors">
+                        إضافة الخدمة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Panel -->
+    <div id="notificationPanel" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-0 pointer-events-none">
+    </div>
+
     <script>
+        // Format date function
+        function formatDate(dateString) {
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) {
+                    throw new Error('Invalid date');
+                }
+                return new Intl.DateTimeFormat('ar-TN', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).format(date);
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return 'تاريخ غير صالح';
+            }
+        }
+
+        // Format booking time
+        function formatBookingDateTime(date, time) {
+            try {
+                const dateTime = new Date(`${date}T${time}`);
+                if (isNaN(dateTime.getTime())) {
+                    throw new Error('Invalid date');
+                }
+                return new Intl.DateTimeFormat('ar-TN', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).format(dateTime);
+            } catch (error) {
+                console.error('Error formatting booking date/time:', error);
+                return 'تاريخ غير صالح';
+            }
+        }
+
+        // Get status color
+        function getStatusColor(status) {
+            switch(status) {
+                case 'confirmed':
+                    return 'bg-green-50 border-green-500';
+                case 'cancelled':
+                    return 'bg-red-50 border-red-500';
+                default:
+                    return 'bg-yellow-50 border-yellow-500';
+            }
+        }
+
+        // Get status text in Arabic
+        function getStatusText(status) {
+            switch(status) {
+                case 'confirmed':
+                    return 'مؤكد';
+                case 'cancelled':
+                    return 'ملغى';
+                default:
+                    return 'في الانتظار';
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            const panel = document.getElementById('notificationPanel');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+
+            panel.innerHTML = `
+                <div class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg ${colors[type]} text-white">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                    <p>${message}</p>
+                </div>
+            `;
+
+            // Show notification
+            panel.classList.remove('opacity-0', 'pointer-events-none');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                panel.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // Update booking status
+        async function updateBookingStatus(bookingId, newStatus) {
+            try {
+                const response = await fetch(`/artisan/bookings/${bookingId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update booking status');
+                }
+
+                // Show success notification
+                const message = newStatus === 'confirmed' 
+                    ? 'تم تأكيد الحجز بنجاح'
+                    : newStatus === 'cancelled'
+                        ? 'تم إلغاء الحجز بنجاح'
+                        : 'تم تحديث حالة الحجز بنجاح';
+                
+                showNotification(message, 'success');
+
+                // Reload activities to show updated status
+                loadActivities();
+            } catch (error) {
+                console.error('Error updating booking status:', error);
+                showNotification('حدث خطأ أثناء تحديث حالة الحجز', 'error');
+            }
+        }
+
+        // Fetch and display recent activities
+        async function loadActivities() {
+            const activitiesList = document.getElementById('activitiesList');
+            
+            try {
+                // Show loading state
+                activitiesList.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500 mb-4"></div>
+                        <p>جاري تحميل النشاطات...</p>
+                    </div>
+                `;
+                
+                const response = await fetch('/artisan/recent-activities');
+                const activities = await response.json();
+                
+                if (activities.length === 0) {
+                    activitiesList.innerHTML = '<p class="text-center text-gray-500 py-4">لا توجد نشاطات حديثة</p>';
+                    return;
+                }
+
+                activitiesList.innerHTML = activities.map(activity => `
+                    <div class="flex items-start p-3 border-r-4 ${getStatusColor(activity.status)} rounded-lg hover:bg-gray-50 transition-colors">
+                        <div class="p-2 bg-yellow-100 rounded-full ml-4">
+                            <i class="fas fa-calendar-check text-yellow-600"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex items-center gap-2">
+                                <p class="text-slate-800">حجز جديد من ${activity.user_name}</p>
+                                <span class="text-sm px-2 py-1 rounded ${getStatusColor(activity.status)} text-slate-700">
+                                    ${getStatusText(activity.status)}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1">
+                                الموعد: ${formatBookingDateTime(activity.booking_date, activity.booking_time)}
+                            </p>
+                            <div class="flex items-center justify-between mt-3">
+                                <p class="text-xs text-gray-500">${formatDate(activity.created_at)}</p>
+                                <div class="flex gap-2">
+                                    ${activity.status === 'pending' ? `
+                                        <button onclick="updateBookingStatus(${activity.id}, 'confirmed')" 
+                                                class="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors">
+                                            <i class="fas fa-check ml-1"></i>
+                                            تأكيد
+                                        </button>
+                                        <button onclick="updateBookingStatus(${activity.id}, 'cancelled')"
+                                                class="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors">
+                                            <i class="fas fa-times ml-1"></i>
+                                            إلغاء
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading activities:', error);
+                showNotification('حدث خطأ أثناء تحميل النشاطات', 'error');
+                activitiesList.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-circle text-4xl mb-4"></i>
+                        <p>حدث خطأ أثناء تحميل النشاطات</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
         // Fetch and display statistics
         async function loadStats() {
             try {
@@ -188,15 +431,18 @@
                 // Update the stats
                 document.getElementById('services_Count').textContent = data.services;
                 document.getElementById('reviewsCount').textContent = data.reviews;
-                document.getElementById('clientsCount').textContent = data.total_bookings;
+                document.getElementById('clientsCount').textContent = data.clients;
                 document.getElementById('appointmentsCount').textContent = data.appointments;
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
         }
 
-        // Load stats when page loads
-        document.addEventListener('DOMContentLoaded', loadStats);
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadActivities();
+        });
         
         function logout() {
             fetch('/logout', {
@@ -214,6 +460,151 @@
                 console.error('Logout error:', error);
             });
         }
+
+        function openServiceModal() {
+            document.getElementById('serviceModal').classList.remove('hidden');
+        }
+
+        function closeServiceModal() {
+            document.getElementById('serviceModal').classList.add('hidden');
+            document.getElementById('serviceForm').reset();
+        }
+
+        async function submitService(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/artisan/services', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        serviceType: formData.get('serviceType'),
+                        specialty: formData.get('specialty'),
+                        hourlyRate: formData.get('hourlyRate'),
+                        description: formData.get('description')
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update specialty');
+                }
+
+                showNotification('تم تحديث التخصص بنجاح', 'success');
+                closeServiceModal();
+                
+                // Reload stats to show updated info
+                loadStats();
+            } catch (error) {
+                console.error('Error updating specialty:', error);
+                showNotification('حدث خطأ أثناء تحديث التخصص', 'error');
+            }
+        }
+
+        let isNotificationsOpen = false;
+
+        async function loadNotifications() {
+            try {
+                const response = await fetch('/artisan/notifications');
+                if (!response.ok) throw new Error('Failed to fetch notifications');
+                
+                const notifications = await response.json();
+                const notificationsList = document.getElementById('notificationsList');
+                const notificationCount = document.getElementById('notificationCount');
+                
+                // Update notification count
+                if (notifications.length > 0) {
+                    notificationCount.textContent = notifications.length;
+                    notificationCount.classList.remove('hidden');
+                } else {
+                    notificationCount.classList.add('hidden');
+                }
+                
+                // Clear existing notifications
+                notificationsList.innerHTML = '';
+                
+                // Add new notifications
+                notifications.forEach(notification => {
+                    const date = new Date(notification.booking_date).toLocaleDateString('ar-TN');
+                    const time = notification.booking_time.slice(0, 5);
+                    
+                    const notificationElement = document.createElement('div');
+                    notificationElement.className = 'p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors';
+                    notificationElement.innerHTML = `
+                        <div class="text-slate-800">
+                            <p class="font-semibold">حجز جديد من ${notification.user_name}</p>
+                            <p class="text-sm text-slate-600">
+                                <i class="fas fa-calendar ml-1"></i>${date}
+                                <i class="fas fa-clock mr-3 ml-1"></i>${time}
+                            </p>
+                            ${notification.notes ? `<p class="text-sm mt-2">${notification.notes}</p>` : ''}
+                        </div>
+                    `;
+                    
+                    // Add click handler to mark as read
+                    notificationElement.addEventListener('click', () => markAsRead(notification.id));
+                    
+                    notificationsList.appendChild(notificationElement);
+                });
+                
+                if (notifications.length === 0) {
+                    notificationsList.innerHTML = '<p class="text-slate-600 text-center">لا توجد إشعارات جديدة</p>';
+                }
+            } catch (error) {
+                console.error('Error loading notifications:', error);
+            }
+        }
+
+        async function markAsRead(notificationId) {
+            try {
+                const response = await fetch(`/artisan/notifications/${notificationId}/read`, {
+                    method: 'PUT'
+                });
+                
+                if (!response.ok) throw new Error('Failed to mark notification as read');
+                
+                // Reload notifications
+                loadNotifications();
+            } catch (error) {
+                console.error('Error marking notification as read:', error);
+            }
+        }
+
+        function toggleNotifications(event) {
+            event.preventDefault();
+            const dropdown = document.getElementById('notificationsDropdown');
+            isNotificationsOpen = !isNotificationsOpen;
+            
+            if (isNotificationsOpen) {
+                dropdown.classList.remove('hidden');
+                loadNotifications();
+            } else {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        // Load notifications on page load
+        document.addEventListener('DOMContentLoaded', loadNotifications);
+
+        // Check for new notifications every minute
+        setInterval(loadNotifications, 60000);
+
+        // Close notifications when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('notificationsDropdown');
+            const notificationButton = event.target.closest('button');
+            
+            if (!dropdown) return;
+            
+            // If click is outside the dropdown and not on the notification button
+            if (!dropdown.contains(event.target) && !notificationButton?.contains(event.target)) {
+                isNotificationsOpen = false;
+                dropdown.classList.add('hidden');
+            }
+        });
     </script>
 </body>
 

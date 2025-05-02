@@ -9,16 +9,37 @@ const path = require('path');
 const fs = require('fs');
 
 // Route pour la page profile
-router.get('/', checkArtisanAuth,checkAuth, (req, res) => {
-    res.render('profile/index', {
-        title: 'الملف الشخصي- TN M3allim',
-        user: req.session.userId ? {
-            id: req.session.userId,
-            role: req.session.userRole,
-            name: req.session.userName
-        } : null
-    });
+router.get('/', checkArtisanAuth, checkAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT u.*, a.spécialité, a.expérience, a.localisation, a.rating, a.disponibilité, a.description, a.tarif_horaire
+            FROM utilisateurs u
+            LEFT JOIN artisans a ON u.id = a.utilisateur_id
+            WHERE u.id = ?
+        `;
+        
+        const [userData] = await db.promise().query(query, [req.session.userId]);
+        
+        if (userData[0] && userData[0].photo_profile) {
+            userData[0].photo_profile = `data:image/jpeg;base64,${userData[0].photo_profile.toString('base64')}`;
+        }
+
+        res.render('profile/index', {
+            title: 'الملف الشخصي- TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData[0]?.photo_profile || '/img/avatar-placeholder.png'
+            },
+            profile: userData[0]
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
+
 const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery');
 
 // Get profile data
@@ -54,7 +75,7 @@ router.get('/data', checkAuth, (req, res) => {
         
         // Convert photo buffer to base64 if it exists
         const photo_profile = userData.photo_profile 
-            ? `data:image/jpeg;base64,${userData.photo_profile}`
+            ? `data:image/jpeg;base64,${userData.photo_profile.toString('base64')}`
             : null;
 
         const response = {
@@ -176,21 +197,21 @@ router.post('/update-profile', checkAuth, upload.fields([
                 }
                 
                 // Handle profile photo
-                // In the update-profile route
                 if (req.files && req.files.profilePhoto) {
                     const profilePhoto = req.files.profilePhoto[0];
-                    const photoFileName = `${userId}_${Date.now()}${path.extname(profilePhoto.originalname)}`;
-                    const photoPath = path.join('uploads/profiles', photoFileName);
-                    console.log(profilePhoto,photoFileName,photoPath)
                     
-                    // Save file to disk
-                    fs.writeFileSync(path.join(__dirname, '..', 'public', photoPath), profilePhoto.buffer);
+                    // Read the file buffer
+                    const updatePhotoQuery = `
+                        UPDATE utilisateurs 
+                        SET photo_profile = ?
+                        WHERE id = ?
+                    `;
                     
-                    // Update database with filename
-                    const updatePhotoQuery = 'UPDATE utilisateurs SET photo_profile = ? WHERE id = ?';
-                    db.query(updatePhotoQuery, [photoFileName, userId], (err, result) => {
+                    db.query(updatePhotoQuery, [profilePhoto.buffer, userId], (err, result) => {
                         if (err) {
                             console.error('Error updating profile photo:', err);
+                        } else {
+                            console.log('Profile photo updated successfully');
                         }
                     });
                 }

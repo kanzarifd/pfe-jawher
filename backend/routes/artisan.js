@@ -3,54 +3,76 @@ const router = express.Router();
 const db = require('../config/database');
 const { checkArtisanAuth, checkAuth } = require('../middleware/auth');  // Updated import
 
+// Helper function to get user data including photo
+const getUserData = async (userId) => {
+    const query = `
+        SELECT u.*, a.spécialité, a.expérience, a.localisation, a.rating, a.disponibilité, a.description, a.tarif_horaire, u.photo_profile
+        FROM utilisateurs u
+        LEFT JOIN artisans a ON u.id = a.utilisateur_id
+        WHERE u.id = ?
+    `;
+    const [rows] = await db.promise().query(query, [userId]);
+    const userData = rows[0];
+    
+    if (userData && userData.photo_profile) {
+        userData.photo_profile = `data:image/jpeg;base64,${userData.photo_profile.toString('base64')}`;
+    }
+    
+    return userData;
+};
+
 // Route pour la page artisan
-router.get('/', checkArtisanAuth, (req, res) => {  // Changed from checkArtisanRole to checkArtisanAuth
-    res.render('artisan/index', {
-        title: 'لوحة التحكم - TN M3allim',
-        user: req.session.userId ? {
-            id: req.session.userId,
-            role: req.session.userRole,
-            name: req.session.userName
-        } : null
-    });
+router.get('/', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('artisan/index', {
+            title: 'لوحة التحكم - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            }
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
 // Get artisan data
-router.get('/get-artisans', (req, res) => {
-    const query = `
-        SELECT a.*, u.nom, u.email, u.photo_profile, u.gouvernorat, u.ville,
-        COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
-        COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
-        FROM artisans a 
-        JOIN utilisateurs u ON a.utilisateur_id = u.id
-        WHERE u.rôle = 'artisan'
-    `;
-    
-    db.query(query, (err, results) => {
-        if (err) {
-            console.error('Error fetching artisans:', err);
-            return res.status(500).json({ error: 'Error fetching artisans' });
-        }
+router.get('/get-artisans', async (req, res) => {
+    try {
+        const query = `
+            SELECT a.*, u.nom, u.email, u.photo_profile, u.gouvernorat, u.ville,
+            COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
+            COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
+            FROM artisans a 
+            JOIN utilisateurs u ON a.utilisateur_id = u.id
+            WHERE u.rôle = 'artisan'
+        `;
+        
+        const [results] = await db.promise().query(query);
         res.json(results);
-    });
+    } catch (error) {
+        console.error('Error fetching artisans:', error);
+        res.status(500).json({ error: 'Error fetching artisans' });
+    }
 });
 
 // Get specific artisan - modified to work with ID parameter
-router.get('/get-artisan/:id', (req, res) => {
-    const query = `
-        SELECT a.*, u.nom, u.email, u.photo_profile,
-        COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
-        COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
-        FROM artisans a 
-        JOIN utilisateurs u ON a.utilisateur_id = u.id
-        WHERE a.id = ? AND u.rôle = 'artisan'
-    `;
-    
-    db.query(query, [req.params.id], (err, results) => {
-        if (err) {
-            console.error('Error fetching artisan:', err);
-            return res.status(500).json({ error: 'Error fetching artisan details' });
-        }
+router.get('/get-artisan/:id', async (req, res) => {
+    try {
+        const query = `
+            SELECT a.*, u.nom, u.email, u.photo_profile,
+            COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
+            COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
+            FROM artisans a 
+            JOIN utilisateurs u ON a.utilisateur_id = u.id
+            WHERE a.id = ? AND u.rôle = 'artisan'
+        `;
+        
+        const [results] = await db.promise().query(query, [req.params.id]);
         if (results.length === 0) {
             return res.status(404).json({ error: 'Artisan not found' });
         }
@@ -58,29 +80,36 @@ router.get('/get-artisan/:id', (req, res) => {
         // Convert Buffer to base64 string if photo exists
         const artisan = results[0];
         if (artisan.photo_profile) {
-            artisan.photo_profile = Buffer.from(artisan.photo_profile);
+            artisan.photo_profile = `data:image/jpeg;base64,${artisan.photo_profile.toString('base64')}`;
         }
 
         res.json(artisan);
-    });
+    } catch (error) {
+        console.error('Error fetching artisan:', error);
+        res.status(500).json({ error: 'Error fetching artisan details' });
+    }
 });
 
 // Get artisan reviews
 router.get('/get-reviews/:artisanId', async (req, res) => {
     try {
         const query = `
-            SELECT r.*, u.nom as user_name
+            SELECT r.*, u.nom as user_name, u.photo_profile as user_photo
             FROM reviews r 
             JOIN utilisateurs u ON r.user_id = u.id 
             WHERE r.artisan_id = ? 
             ORDER BY r.created_at DESC
         `;
         
-        db.query(query, [req.params.artisanId], (err, results) => {
-            if (err) throw err;
-            res.json(results);
-        });
+        const [results] = await db.promise().query(query, [req.params.artisanId]);
+        res.json(results.map(review => {
+            if (review.user_photo) {
+                review.user_photo = `data:image/jpeg;base64,${review.user_photo.toString('base64')}`;
+            }
+            return review;
+        }));
     } catch (error) {
+        console.error('Error fetching reviews:', error);
         res.status(500).json({ error: 'Error fetching reviews' });
     }
 });
@@ -100,31 +129,22 @@ router.post('/submit-review', checkAuth, async (req, res) => {
             VALUES (?, ?, ?, ?, NOW())
         `;
         
-        db.query(query, [req.session.userId, artisanId, rating, review], (err, results) => {
-            if (err) {
-                console.error('Error submitting review:', err);
-                return res.status(500).json({ error: 'Error submitting review' });
-            }
-            
-            // Update artisan's average rating
-            const updateRatingQuery = `
-                UPDATE artisans 
-                SET rating = (
-                    SELECT AVG(rating) 
-                    FROM reviews 
-                    WHERE artisan_id = ?
-                )
-                WHERE id = ?
-            `;
-            
-            db.query(updateRatingQuery, [artisanId, artisanId], (err) => {
-                if (err) {
-                    console.error('Error updating artisan rating:', err);
-                }
-            });
+        const [results] = await db.promise().query(query, [req.session.userId, artisanId, rating, review]);
+        
+        // Update artisan's average rating
+        const updateRatingQuery = `
+            UPDATE artisans 
+            SET rating = (
+                SELECT AVG(rating) 
+                FROM reviews 
+                WHERE artisan_id = ?
+            )
+            WHERE id = ?
+        `;
+        
+        await db.promise().query(updateRatingQuery, [artisanId, artisanId]);
 
-            res.json({ success: true });
-        });
+        res.json({ success: true });
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Error submitting review' });
@@ -142,55 +162,55 @@ router.post('/book-artisan', checkAuth, async (req, res) => {
             VALUES (?, ?, ?, ?, ?)
         `;
         
-        db.query(query, [userId, artisanId, date, time, notes], (err, results) => {
-            if (err) throw err;
-            res.json({ success: true });
-        });
+        const [results] = await db.promise().query(query, [userId, artisanId, date, time, notes]);
+        res.json({ success: true });
     } catch (error) {
+        console.error('Error:', error);
         res.status(500).json({ error: 'Error booking artisan' });
     }
 });
 
 // Add report problem route
-router.get('/report-problem', checkArtisanAuth, (req, res) => {
-    res.render('report-problem/index', {
-        title: 'الإبلاغ عن مشكلة - TN M3allim',
-        user: {
-            id: req.session.userId,
-            role: req.session.userRole,
-            name: req.session.userName
-        },
-        active: 'report'
-    });
+router.get('/report-problem', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('report-problem/index', {
+            title: 'الإبلاغ عن مشكلة - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            },
+            active: 'report'
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
 // Add POST route for handling report submissions
-router.post('/report-problem', checkArtisanAuth, (req, res) => {
-    const { navigation, design, comments } = req.body;
-    const userId = req.session.userId;
+router.post('/report-problem', checkArtisanAuth, async (req, res) => {
+    try {
+        const { navigation, design, comments } = req.body;
+        const userId = req.session.userId;
 
-    // First get the artisan_id from the artisans table
-    const getArtisanIdQuery = `
-        SELECT id FROM artisans WHERE utilisateur_id = ?
-    `;
+        // First get the artisan_id from the artisans table
+        const getArtisanIdQuery = `
+            SELECT id FROM artisans WHERE utilisateur_id = ?
+        `;
 
-    db.query(getArtisanIdQuery, [userId], (err, results) => {
-        if (err) {
-            console.error('Error fetching artisan id:', err);
-            return res.status(500).json({ 
-                success: false, 
-                message: 'حدث خطأ أثناء معالجة الطلب' 
-            });
-        }
-
-        if (results.length === 0) {
+        const [artisanResult] = await db.promise().query(getArtisanIdQuery, [userId]);
+        
+        if (artisanResult.length === 0) {
             return res.status(404).json({ 
                 success: false, 
                 message: 'لم يتم العثور على معرف الحرفي' 
             });
         }
 
-        const artisanId = results[0].id;
+        const artisanId = artisanResult[0].id;
 
         // Now insert the report with the correct artisan_id
         const insertReportQuery = `
@@ -198,51 +218,39 @@ router.post('/report-problem', checkArtisanAuth, (req, res) => {
             VALUES (?, ?, ?, ?)
         `;
 
-        db.query(insertReportQuery, [artisanId, navigation, design, comments], (err, results) => {
-            if (err) {
-                console.error('Error saving report:', err);
-                return res.status(500).json({ 
-                    success: false, 
-                    message: 'حدث خطأ أثناء حفظ التقرير' 
-                });
-            }
-
-            res.json({ 
-                success: true, 
-                message: 'تم إرسال التقرير بنجاح' 
-            });
+        await db.promise().query(insertReportQuery, [artisanId, navigation, design, comments]);
+        
+        res.json({ 
+            success: true, 
+            message: 'تم إرسال التقرير بنجاح' 
         });
-    });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'حدث خطأ أثناء حفظ التقرير' 
+        });
+    }
 });
 
 // Get profile page with artisan data
 router.get('/profile', checkArtisanAuth, async (req, res) => {
     try {
-        const query = `
-            SELECT u.*, a.*
-            FROM utilisateurs u
-            JOIN artisans a ON u.id = a.utilisateur_id
-            WHERE u.id = ?
-        `;
-        
-        db.query(query, [req.session.userId], (err, results) => {
-            if (err) throw err;
-            
-            const profile = results[0];
-            res.render('profile/index', {
-                title: 'الملف الشخصي - TN M3allim',
-                user: {
-                    id: req.session.userId,
-                    role: req.session.userRole,
-                    name: req.session.userName
-                },
-                profile: profile,
-                active: 'profile'
-            });
+        const userData = await getUserData(req.session.userId);
+        res.render('profile/index', {
+            title: 'الملف الشخصي - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            },
+            profile: userData,
+            active: 'profile'
         });
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).send('Error loading profile');
+        res.status(500).send('Internal Server Error');
     }
 });
 
@@ -258,26 +266,22 @@ router.post('/profile/update', checkArtisanAuth, async (req, res) => {
             WHERE id = ?
         `;
         
-        db.query(updateUserQuery, [fullname, phone, address, req.session.userId], async (err) => {
-            if (err) throw err;
+        await db.promise().query(updateUserQuery, [fullname, phone, address, req.session.userId]);
 
-            // Update artisan table
-            const updateArtisanQuery = `
-                UPDATE artisans 
-                SET métier = ?, années_expérience = ?, tarif_horaire = ?, description = ?
-                WHERE utilisateur_id = ?
-            `;
-            
-            db.query(updateArtisanQuery, 
-                [profession, experience, hourly_rate, description, req.session.userId], 
-                (err) => {
-                    if (err) throw err;
-                    res.json({ 
-                        success: true, 
-                        message: 'تم تحديث الملف الشخصي بنجاح' 
-                    });
-                }
-            );
+        // Update artisan table
+        const updateArtisanQuery = `
+            UPDATE artisans 
+            SET métier = ?, années_expérience = ?, tarif_horaire = ?, description = ?
+            WHERE utilisateur_id = ?
+        `;
+        
+        await db.promise().query(updateArtisanQuery, 
+            [profession, experience, hourly_rate, description, req.session.userId]
+        );
+        
+        res.json({ 
+            success: true, 
+            message: 'تم تحديث الملف الشخصي بنجاح' 
         });
     } catch (error) {
         console.error('Error:', error);
@@ -289,81 +293,81 @@ router.post('/profile/update', checkArtisanAuth, async (req, res) => {
 });
 
 // Add reviews page route
-router.get('/reviews', checkArtisanAuth, (req, res) => {
-    res.render('artisan/reviews', {
-        title: 'التقييمات - TN M3allim',
-        user: {
-            id: req.session.userId,
-            role: req.session.userRole,
-            name: req.session.userName
-        },
-        active: 'reviews'
-    });
+router.get('/reviews', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('artisan/reviews', {
+            title: 'التقييمات - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            },
+            active: 'reviews'
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
 // Get artisan's reviews data
-router.get('/reviews/data', checkArtisanAuth, (req, res) => {
-    // First get artisan_id
-    const getArtisanIdQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
-    
-    db.query(getArtisanIdQuery, [req.session.userId], (err, artisanResults) => {
-        if (err) {
-            console.error('Error fetching artisan id:', err);
-            return res.status(500).json({ error: 'Error fetching reviews' });
-        }
-
-        if (artisanResults.length === 0) {
+router.get('/reviews/data', checkArtisanAuth, async (req, res) => {
+    try {
+        // First get artisan_id
+        const getArtisanIdQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanIdQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
             return res.status(404).json({ error: 'Artisan not found' });
         }
 
-        const artisanId = artisanResults[0].id;
+        const artisanId = artisanResult[0].id;
 
         // Then get reviews with user information
         const reviewsQuery = `
-            SELECT r.*, u.nom as client_name, u.photo_profile as client_photo
+            SELECT 
+                r.*, u.nom as client_name, u.photo_profile as client_photo
             FROM reviews r
             JOIN utilisateurs u ON r.user_id = u.id
             WHERE r.artisan_id = ?
             ORDER BY r.created_at DESC
         `;
 
-        db.query(reviewsQuery, [artisanId], (err, reviews) => {
-            if (err) {
-                console.error('Error fetching reviews:', err);
-                return res.status(500).json({ error: 'Error fetching reviews' });
-            }
-
-            res.json({
-                reviews: reviews.map(review => ({
-                    id: review.id,
-                    rating: review.rating,
-                    comment: review.review_text,
-                    clientName: review.client_name,
-                    clientPhoto: review.client_photo,
-                    createdAt: review.created_at
-                }))
-            });
+        const [reviews] = await db.promise().query(reviewsQuery, [artisanId]);
+        
+        res.json({
+            reviews: reviews.map(review => ({
+                id: review.id,
+                rating: review.rating,
+                comment: review.review_text,
+                clientName: review.client_name,
+                clientPhoto: review.client_photo ? `data:image/jpeg;base64,${review.client_photo.toString('base64')}` : '/img/avatar-placeholder.png',
+                createdAt: review.created_at
+            }))
         });
-    });
+    } catch (error) {
+        console.error('Error fetching reviews:', error);
+        res.status(500).json({ error: 'Error fetching reviews' });
+    }
 });
 
 // Get unique artisan locations
-router.get('/get-locations', (req, res) => {
-    const query = `
-        SELECT DISTINCT 
-            u.gouvernorat,
-            u.ville
-        FROM utilisateurs u
-        WHERE u.rôle = 'artisan'
-        ORDER BY u.gouvernorat, u.ville
-    `;
-    
-    db.query(query, (err, results) => {
-        if (err) {
-            console.error('Error fetching locations:', err);
-            return res.status(500).json({ error: 'Error fetching locations' });
-        }
-
+router.get('/get-locations', async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT 
+                u.gouvernorat,
+                u.ville
+            FROM utilisateurs u
+            WHERE u.rôle = 'artisan'
+            ORDER BY u.gouvernorat, u.ville
+        `;
+        
+        const [results] = await db.promise().query(query);
+        
         // Group locations by governorate
         const locations = {};
         results.forEach(row => {
@@ -376,27 +380,33 @@ router.get('/get-locations', (req, res) => {
         });
 
         res.json(locations);
-    });
+    } catch (error) {
+        console.error('Error fetching locations:', error);
+        res.status(500).json({ error: 'Error fetching locations' });
+    }
 });
 
 // Route for artisan list page (admin view)
-router.get('/list', (req, res) => {
-    const query = `
-        SELECT 
-            COUNT(*) AS totalArtisans,
-            SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) AS activeArtisans
-        FROM utilisateurs
-        WHERE rôle = 'artisan'`;
-    db.query(query, (err, results) => {
-        if (err) {
-            console.error('Error counting artisans:', err);
-            return res.render('artisan-list/index', { totalArtisans: 0, activeArtisans: 0, error: 'حدث خطأ أثناء جلب عدد الحرفيين' });
-        }
+router.get('/list', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                COUNT(*) AS totalArtisans,
+                SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) AS activeArtisans
+            FROM utilisateurs
+            WHERE rôle = 'artisan'
+        `;
+        
+        const [results] = await db.promise().query(query);
+        
         res.render('artisan-list/index', { 
             totalArtisans: results[0].totalArtisans,
             activeArtisans: results[0].activeArtisans || 0
         });
-    });
+    } catch (error) {
+        console.error('Error counting artisans:', error);
+        res.render('artisan-list/index', { totalArtisans: 0, activeArtisans: 0, error: 'حدث خطأ أثناء جلب عدد الحرفيين' });
+    }
 });
 
 // Get artisan statistics
@@ -404,6 +414,7 @@ router.get('/stats', checkArtisanAuth, async (req, res) => {
     try {
         // First get artisan_id
         const getArtisanIdQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
         const [artisanResult] = await db.promise().query(getArtisanIdQuery, [req.session.userId]);
         
         if (artisanResult.length === 0) {
@@ -419,26 +430,320 @@ router.get('/stats', checkArtisanAuth, async (req, res) => {
                 COALESCE(AVG(r.rating), 0) as rating,
                 COUNT(DISTINCT r.id) as reviews,
                 COUNT(DISTINCT b.id) as appointments,
-                COUNT(b.id) as total_bookings
+                (
+                    SELECT COUNT(DISTINCT user_id) 
+                    FROM (
+                        SELECT user_id FROM bookings WHERE artisan_id = ?
+                        UNION
+                        SELECT user_id FROM reviews WHERE artisan_id = ?
+                    ) as unique_clients
+                ) as clients_count
             FROM artisans a
             LEFT JOIN reviews r ON r.artisan_id = a.id
             LEFT JOIN bookings b ON b.artisan_id = a.id
             WHERE a.id = ?
         `;
         
-        const [stats] = await db.promise().query(statsQuery, [artisanId]);
+        const [stats] = await db.promise().query(statsQuery, [artisanId, artisanId, artisanId]);
         
         res.json({
             services: stats[0].services || 0,
             rating: parseFloat(stats[0].rating) || 0,
             reviews: stats[0].reviews || 0,
             appointments: stats[0].appointments || 0,
-            total_bookings: stats[0].total_bookings || 0
+            clients: stats[0].clients_count || 0
         });
         
     } catch (error) {
         console.error('Error fetching stats:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get recent activities (bookings)
+router.get('/recent-activities', checkArtisanAuth, async (req, res) => {
+    try {
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+
+        const artisanId = artisanResult[0].id;
+        const status = req.query.status;
+
+        // Build the activities query with optional status filter
+        const activitiesQuery = `
+            SELECT 
+                b.id,
+                DATE_FORMAT(b.booking_date, '%Y-%m-%d') as booking_date,
+                TIME_FORMAT(b.booking_time, '%H:%i') as booking_time,
+                b.status,
+                DATE_FORMAT(b.created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+                u.nom as user_name,
+                u.photo_profile as user_photo,
+                'booking' as type
+            FROM bookings b
+            JOIN utilisateurs u ON b.user_id = u.id
+            WHERE b.artisan_id = ?
+            ${status && status !== 'all' ? 'AND b.status = ?' : ''}
+            ORDER BY b.created_at DESC
+        `;
+
+        const queryParams = status && status !== 'all' ? [artisanId, status] : [artisanId];
+        const [activities] = await db.promise().query(activitiesQuery, queryParams);
+
+        res.json(activities.map(activity => {
+            if (activity.user_photo) {
+                activity.user_photo = `data:image/jpeg;base64,${activity.user_photo.toString('base64')}`;
+            }
+            return activity;
+        }));
+    } catch (error) {
+        console.error('Error fetching recent activities:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update booking status
+router.put('/bookings/:id/status', checkArtisanAuth, async (req, res) => {
+    try {
+        const { status } = req.body;
+        const bookingId = req.params.id;
+
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+        
+        const artisanId = artisanResult[0].id;
+
+        // Verify the booking belongs to this artisan
+        const verifyQuery = `SELECT id FROM bookings WHERE id = ? AND artisan_id = ?`;
+        
+        const [bookingResult] = await db.promise().query(verifyQuery, [bookingId, artisanId]);
+
+        if (bookingResult.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        // Start a transaction
+        const connection = await db.promise().getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Update booking status
+            await connection.query(
+                'UPDATE bookings SET status = ? WHERE id = ?',
+                [status, bookingId]
+            );
+
+            // If status is 'confirmed', update artisan's disponibilité to null
+            if (status === 'confirmed') {
+                await connection.query(
+                    'UPDATE artisans SET disponibilité = NULL WHERE id = ?',
+                    [artisanId]
+                );
+            }
+
+            await connection.commit();
+            res.json({ message: 'Booking status updated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error updating booking status:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Add new service/specialty
+router.post('/services', checkArtisanAuth, async (req, res) => {
+    try {
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id, spécialité FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+        
+        const artisanId = artisanResult[0].id;
+        const { serviceType, specialty, hourlyRate, description } = req.body;
+
+        // Update artisan's specialty and other details
+        const updateQuery = `
+            UPDATE artisans 
+            SET spécialité = ?,
+                description = ?,
+                tarif_horaire = ?
+            WHERE id = ?
+        `;
+        
+        await db.promise().query(updateQuery, [
+            specialty || serviceType, // Use specialty if provided, otherwise use serviceType
+            description,
+            hourlyRate,
+            artisanId
+        ]);
+        
+        res.json({ message: 'Specialty updated successfully' });
+    } catch (error) {
+        console.error('Error updating specialty:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get unread notifications (new bookings)
+router.get('/notifications', checkArtisanAuth, async (req, res) => {
+    try {
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+        
+        const artisanId = artisanResult[0].id;
+
+        // Get new bookings (unread notifications)
+        const query = `
+            SELECT 
+                b.id,
+                b.booking_date,
+                b.booking_time,
+                b.status,
+                b.created_at,
+                u.nom as user_name,
+                u.photo_profile as user_photo,
+                b.notes
+            FROM bookings b
+            JOIN utilisateurs u ON b.user_id = u.id
+            WHERE b.artisan_id = ? 
+            AND b.status = 'pending'
+            AND b.is_read = 0
+            ORDER BY b.created_at DESC
+        `;
+        
+        const [notifications] = await db.promise().query(query, [artisanId]);
+        
+        res.json(notifications.map(notification => {
+            if (notification.user_photo) {
+                notification.user_photo = `data:image/jpeg;base64,${notification.user_photo.toString('base64')}`;
+            }
+            return notification;
+        }));
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Mark notification as read
+router.put('/notifications/:id/read', checkArtisanAuth, async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+        
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+        
+        const artisanId = artisanResult[0].id;
+
+        // Verify the booking belongs to this artisan
+        const verifyQuery = `SELECT id FROM bookings WHERE id = ? AND artisan_id = ?`;
+        
+        const [bookingResult] = await db.promise().query(verifyQuery, [bookingId, artisanId]);
+
+        if (bookingResult.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        // Mark as read
+        const updateQuery = `UPDATE bookings SET is_read = 1 WHERE id = ?`;
+        await db.promise().query(updateQuery, [bookingId]);
+        
+        res.json({ message: 'Notification marked as read' });
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Activities page
+router.get('/activities', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('artisan/activities', {
+            title: 'آخر النشاطات - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            }
+        });
+    } catch (error) {
+        console.error('Error loading activities page:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+// Update the report route
+router.get('/report', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('artisan/report', {
+            title: 'تقرير الأرباح - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            },
+            active: 'report'
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+// Update the reviews route
+router.get('/reviews', checkArtisanAuth, async (req, res) => {
+    try {
+        const userData = await getUserData(req.session.userId);
+        res.render('artisan/reviews', {
+            title: 'التقييمات - TN M3allim',
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName,
+                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
+            },
+            active: 'reviews'
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).send('Internal Server Error');
     }
 });
 

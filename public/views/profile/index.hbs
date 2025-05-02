@@ -76,7 +76,7 @@ ink o l        .nav-link {
                         <div class="flex flex-col items-center">
                             <div class="relative group">
                                 <!-- Update the img src attribute in the profile photo section -->
-                                <img :src="formData.profilePhoto.preview || userData.photo || '/img/avatar-placeholder.png'" 
+                                <img :src="formData.profilePhoto.preview || userData.photo_profile || '/img/avatar-placeholder.png'" 
                                      class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover cursor-pointer"
                                      @click="document.getElementById('profilePhotoInput').click()">
                                 
@@ -93,7 +93,7 @@ ink o l        .nav-link {
                                 </button>
                                 <button type="button" @click="removeProfilePhoto" 
                                         class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors flex items-center"
-                                        :disabled="!formData.profilePhoto.preview && !userData.photo">
+                                        :disabled="!formData.profilePhoto.preview && !userData.photo_profile">
                                     <i class="fas fa-trash ml-2"></i>
                                     إزالة
                                 </button>
@@ -307,10 +307,7 @@ ink o l        .nav-link {
         function app() {
             return {
                 loading: false,
-                message: {
-                    text: '',
-                    type: 'success'
-                },
+                message: null,
                 userData: {
                     id: {{user.id}},
                     role: "{{user.role}}",
@@ -318,7 +315,7 @@ ink o l        .nav-link {
                     email: "{{userProfile.email}}",
                     phone: "{{userProfile.phone}}",
                     address: "{{userProfile.address}}",
-                    photo: "{{userProfile.photo}}",
+                    photo_profile: "{{userProfile.photo}}",
                     governorate: "{{userProfile.governorate}}",
                     city: "{{userProfile.city}}",
                     postalCode: "{{userProfile.postal_code}}",
@@ -337,6 +334,11 @@ ink o l        .nav-link {
                     ]
                 },
                 formData: {
+                    profilePhoto: {
+                        file: null,
+                        preview: null,
+                        remove: false
+                    },
                     email: '',
                     fullname: '',
                     phone: '',
@@ -344,66 +346,66 @@ ink o l        .nav-link {
                     currentPassword: '',
                     newPassword: '',
                     confirmPassword: '',
-                    profilePhoto: {
-                        file: null,
-                        preview: null,
-                        remove: false
-                    },
-                    governorate: '',
-                    city: '',
-                    postalCode: '',
                     profession: '',
                     otherProfession: '',
-                    experience: 0,
-                    hourlyRate: 0,
+                    experience: '',
+                    hourlyRate: '',
                     description: '',
                     gallery: [],
                     galleryToRemove: []
                 },
                 
-                init() {
-                    // Initialize form data from user data
-                    this.formData = {
-                        ...this.formData,
-                        email: this.userData.email || '',
-                        fullname: this.userData.name || '',
-                        phone: this.userData.phone || '',
-                        address: this.userData.address || '',
-                        governorate: this.userData.governorate || '',
-                        city: this.userData.city || '',
-                        postalCode: this.userData.postalCode || '',
-                        profession: this.userData.profession || '',
-                        experience: this.userData.experience || 0,
-                        hourlyRate: this.userData.hourlyRate || 0,
-                        description: this.userData.description || '',
-                        gallery: [...(this.userData.gallery || [])],
-                        galleryToRemove: []
-                    };
-                    
-                    // Add this line to fetch profile data when component initializes
-                    this.fetchProfileData();
-                    console.log('Initial userData:', this.userData);
-                    console.log('Initial formData:', this.formData);
-                    
-                    // Handle profession type
-                    if (this.userData.role === 'artisan') {
-                        const predefinedProfessions = ['plumber', 'electrician', 'carpenter', 'painter', 'builder', 'tiler', 'gardener', 'cleaner'];
+                async init() {
+                    try {
+                        const response = await fetch('/profile/data');
+                        const data = await response.json();
+                        this.userData = data;
                         
-                        if (!predefinedProfessions.includes(this.formData.profession)) {
-                            this.formData.otherProfession = this.formData.profession;
-                            this.formData.profession = 'other';
+                        // Initialize form data with user data
+                        this.formData.fullname = data.name || '';
+                        this.formData.email = data.email || '';
+                        this.formData.phone = data.phone || '';
+                        this.formData.address = data.address || '';
+                        this.formData.governorate = data.governorate || '';
+                        this.formData.city = data.city || '';
+                        this.formData.postalCode = data.postal_code || '';
+                        
+                        if (data.artisan) {
+                            this.formData.profession = data.artisan.spécialité || '';
+                            this.formData.experience = data.artisan.expérience || '';
+                            this.formData.hourlyRate = data.artisan.tarif_horaire || '';
+                            this.formData.description = data.artisan.description || '';
                         }
+                        
+                        // Load gallery if user is artisan
+                        if (data.rôle === 'artisan') {
+                            const galleryResponse = await fetch('/profile/gallery');
+                            const galleryData = await galleryResponse.json();
+                            this.formData.gallery = galleryData.map(item => ({
+                                id: item.id,
+                                preview: item.preview,
+                                isNew: false,
+                                file: null
+                            }));
+                        }
+                    } catch (error) {
+                        console.error('Error loading profile data:', error);
+                        this.message = { text: 'حدث خطأ في تحميل بيانات الملف الشخصي', type: 'error' };
                     }
                 },
                 
                 uploadProfilePhoto(event) {
                     const file = event.target.files[0];
                     if (file) {
-                        this.formData.profilePhoto = {
-                            file: file,
-                            preview: URL.createObjectURL(file),
-                            remove: false
+                        this.formData.profilePhoto.file = file;
+                        this.formData.profilePhoto.remove = false;
+                        
+                        // Create preview URL
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.formData.profilePhoto.preview = e.target.result;
                         };
+                        reader.readAsDataURL(file);
                     }
                 },
                 
@@ -483,7 +485,7 @@ ink o l        .nav-link {
                             // Update user data with the base64 photo
                             this.userData = {
                                 ...this.userData,
-                                photo: result.photo_profile, // This will now be a base64 string
+                                photo_profile: result.photo_profile, // This will now be a base64 string
                                 role: result.rôle || this.userData.role
                             };
                        
@@ -617,4 +619,3 @@ ink o l        .nav-link {
     </script>
 </body>
 </html>
-
