@@ -131,7 +131,9 @@
                 </div>
             </div>
 
-             <!-- Recent Activities -->
+           
+
+            <!-- Recent Activities -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-8">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="text-lg font-semibold text-slate-800">آخر النشاطات</h3>
@@ -185,14 +187,14 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">نوع الخدمة</label>
                     <select id="serviceType" name="serviceType" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
                         <option value="">اختر نوع الخدمة</option>
-                        <option value="plumber">سباكة</option>
-                        <option value="electrician">كهرباء</option>
-                        <option value="carpenter">نجارة</option>
-                        <option value="painter">دهان</option>
-                        <option value="cleaner">تنظيف</option>
-                        <option value="gardener">بستنة</option>
-                        <option value="ac_repair">تصليح مكيفات</option>
-                        <option value="appliance_repair">تصليح أجهزة منزلية</option>
+                        <option value="سباكة">سباكة</option>
+                        <option value="كهرباء">كهرباء</option>
+                        <option value="نجارة">نجارة</option>
+                        <option value="دهان">دهان</option>
+                        <option value="تنظيف">تنظيف</option>
+                        <option value="بستنة">بستنة</option>
+                        <option value="تصليح مكيفات">تصليح مكيفات</option>
+                        <option value="تصليح أجهزة منزلية">تصليح أجهزة منزلية</option>
                     </select>
                 </div>
                 <div>
@@ -209,19 +211,15 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
-                    <textarea id="description" name="description" required
-                           class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 h-24"
-                           placeholder="اكتب وصفاً مختصراً لخدماتك وخبراتك"></textarea>
+                    <textarea id="description" name="description" required rows="3"
+                            class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                            placeholder="اكتب وصفاً مختصراً لخدماتك وخبراتك"></textarea>
                 </div>
-                <div class="flex justify-end gap-2 mt-6">
+                <div class="flex justify-end space-x-4 space-x-reverse">
                     <button type="button" onclick="closeServiceModal()"
-                            class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition-colors">
-                        إلغاء
-                    </button>
+                            class="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200">إلغاء</button>
                     <button type="submit"
-                            class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors">
-                        إضافة الخدمة
-                    </button>
+                            class="px-4 py-2 text-white bg-yellow-500 rounded hover:bg-yellow-600">إضافة الخدمة</button>
                 </div>
             </form>
         </div>
@@ -604,6 +602,55 @@
                 isNotificationsOpen = false;
                 dropdown.classList.add('hidden');
             }
+        });
+
+        // Load reviews
+        async function loadReviews() {
+            const reviewsList = document.getElementById('reviewsList');
+            
+            try {
+                // Show loading state
+                reviewsList.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500 mb-4"></div>
+                        <p>جاري تحميل التقييمات...</p>
+                    </div>
+                `;
+                
+                const response = await fetch('/artisan/reviews');
+                const reviews = await response.json();
+                
+                if (reviews.length === 0) {
+                    reviewsList.innerHTML = '<p class="text-center text-gray-500 py-4">لا توجد تقييمات حتى الآن</p>';
+                    return;
+                }
+
+                reviewsList.innerHTML = reviews.map(review => `
+                    <div class="flex items-start p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                        <img src="${review.user_photo}" alt="${review.user_name}" 
+                             class="w-12 h-12 rounded-full object-cover ml-4">
+                        <div class="flex-grow">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-semibold text-slate-800">${review.user_name}</h3>
+                                <div class="flex items-center">
+                                    <span class="text-yellow-500 ml-1">${review.rating}</span>
+                                    <i class="fas fa-star text-yellow-500"></i>
+                                </div>
+                            </div>
+                            <p class="text-gray-600 mt-2">${review.comment}</p>
+                            <p class="text-sm text-gray-500 mt-2">${review.created_at}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading reviews:', error);
+                reviewsList.innerHTML = '<p class="text-center text-red-500 py-4">حدث خطأ أثناء تحميل التقييمات</p>';
+            }
+        }
+
+        // Load reviews on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadReviews();
         });
     </script>
 </body>

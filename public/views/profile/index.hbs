@@ -150,6 +150,40 @@ ink o l        .nav-link {
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Social Media Section -->
+                        <div class="mt-6 border-t border-gray-200 pt-6">
+                            <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                                <i class="fas fa-share-alt text-blue-500 ml-2"></i>
+                                وسائل التواصل الاجتماعي
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fab fa-facebook text-blue-600 ml-2"></i>فيسبوك
+                                    </label>
+                                    <input type="text" x-model="formData.facebook" 
+                                           placeholder="اسم المستخدم في فيسبوك"
+                                           class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fab fa-instagram text-pink-600 ml-2"></i>انستغرام
+                                    </label>
+                                    <input type="text" x-model="formData.instagram" 
+                                           placeholder="اسم المستخدم في انستغرام"
+                                           class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i class="fab fa-linkedin text-blue-700 ml-2"></i>لينكد إن
+                                    </label>
+                                    <input type="text" x-model="formData.linkedin" 
+                                           placeholder="اسم المستخدم في لينكد إن"
+                                           class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Artisan Information (only shown for artisans) -->
@@ -352,7 +386,10 @@ ink o l        .nav-link {
                     hourlyRate: '',
                     description: '',
                     gallery: [],
-                    galleryToRemove: []
+                    galleryToRemove: [],
+                    facebook: '',
+                    instagram: '',
+                    linkedin: ''
                 },
                 
                 async init() {
@@ -382,10 +419,10 @@ ink o l        .nav-link {
                             const galleryResponse = await fetch('/profile/gallery');
                             const galleryData = await galleryResponse.json();
                             this.formData.gallery = galleryData.map(item => ({
-                                id: item.id,
-                                preview: item.preview,
-                                isNew: false,
-                                file: null
+                            id: item.id,
+                            image_path: item.filename,  // Changed from filename to image_path
+                            preview: item.preview || null,
+                            isNew: false
                             }));
                         }
                     } catch (error) {
@@ -476,8 +513,8 @@ ink o l        .nav-link {
                                 this.formData = {
                                     ...this.formData,
                                     profession: result.artisan.spécialité || '',
-                                    experience: result.artisan.expérience || 0,
-                                    hourlyRate: result.artisan.tarif_horaire || 0,
+                                    experience: result.artisan.expérience || '',
+                                    hourlyRate: result.artisan.tarif_horaire || '',
                                     description: result.artisan.description || '',
                                 };
                             }
@@ -503,98 +540,67 @@ ink o l        .nav-link {
                 },
                 
                 async submitForm() {
-                    this.loading = true;
-                    this.message = { text: '', type: 'success' };
-                    
-                    // Validate password if changing
-                    if (this.formData.newPassword || this.formData.confirmPassword || this.formData.currentPassword) {
-                        if (!this.formData.currentPassword) {
-                            this.message = { text: 'يرجى إدخال كلمة المرور الحالية', type: 'error' };
-                            this.loading = false;
-                            return;
-                        }
-                        
-                        if (this.formData.newPassword !== this.formData.confirmPassword) {
-                            this.message = { text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين', type: 'error' };
-                            this.loading = false;
-                            return;
-                        }
-                    }
-                    
-                    // Create FormData object for file uploads
-                    const formData = new FormData();
-                    
-                    // Add basic profile data
-                    formData.append('fullname', this.formData.fullname);
-                    formData.append('phone', this.formData.phone);
-                    formData.append('address', this.formData.address);
-                    formData.append('governorate', this.formData.governorate);
-                    formData.append('city', this.formData.city);
-                    formData.append('postalCode', this.formData.postalCode);
-                    
-                    // Add password data if changing
-                    if (this.formData.newPassword) {
-                        formData.append('currentPassword', this.formData.currentPassword);
-                        formData.append('newPassword', this.formData.newPassword);
-                    }
-                    
-                    // Add profile photo if changing
-                    if (this.formData.profilePhoto.file) {
-                        formData.append('profilePhoto', this.formData.profilePhoto.file);
-                    }
-                    
-                    if (this.formData.profilePhoto.remove) {
-                        formData.append('removeProfilePhoto', 'true');
-                    }
-                    
-                    // Add artisan-specific data if applicable
-                    if (this.userData.role === 'artisan') {
-                        formData.append('profession', this.formData.profession === 'other' ? this.formData.otherProfession : this.formData.profession);
-                        formData.append('experience', this.formData.experience);
-                        formData.append('hourlyRate', this.formData.hourlyRate);
-                        formData.append('description', this.formData.description);
-                        
-                        // Add gallery images to remove
-                        if (this.formData.galleryToRemove.length > 0) {
-                            formData.append('galleryToRemove', JSON.stringify(this.formData.galleryToRemove));
-                        }
-                        
-                        // Add new gallery images
-                        this.formData.gallery.forEach(image => {
-                            if (image.isNew && image.file) {
-                                formData.append('galleryImages', image.file);
-                            }
-                        });
-                    }
-                    
                     try {
-                        const response = await fetch('/update-profile', {
+                        const formData = {
+                            fullname: this.formData.fullname,
+                            phone: this.formData.phone,
+                            address: this.formData.address,
+                            profession: this.formData.profession,
+                            experience: this.formData.experience,
+                            hourly_rate: this.formData.hourlyRate,
+                            description: this.formData.description,
+                            facebook: this.formData.facebook,
+                            instagram: this.formData.instagram,
+                            linkedin: this.formData.linkedin
+                        };
+
+                        const response = await fetch('/artisan/update-profile', {
                             method: 'POST',
-                            body: formData
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(formData)
                         });
-                        
+
                         const result = await response.json();
                         
-                        if (response.ok) {
-                            this.message = { text: 'تم تحديث الملف الشخصي بنجاح', type: 'success' };
+                        if (result.success) {
+                            // Show success message
+                            this.$dispatch('show-toast', {
+                                message: result.message,
+                                type: 'success'
+                            });
                             
-                            // Reset password fields
-                            this.formData.currentPassword = '';
-                            this.formData.newPassword = '';
-                            this.formData.confirmPassword = '';
-                            
-                            // Reload page after 2 seconds to show updated data
+                            // Reload page after 2 seconds
                             setTimeout(() => {
                                 window.location.reload();
                             }, 2000);
                         } else {
-                            this.message = { text: result.error || 'حدث خطأ أثناء تحديث الملف الشخصي', type: 'error' };
+                            throw new Error(result.message);
                         }
                     } catch (error) {
-                        console.error('Error updating profile:', error);
-                        this.message = { text: 'حدث خطأ في الاتصال بالخادم', type: 'error' };
-                    } finally {
-                        this.loading = false;
+                        console.error('Error:', error);
+                        this.$dispatch('show-toast', {
+                            message: error.message || 'حدث خطأ أثناء تحديث الملف الشخصي',
+                            type: 'error'
+                        });
+                    }
+                },
+                
+                async logout() {
+                    try {
+                        const response = await fetch('/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            window.location.href = '/login';
+                        }
+                    } catch (error) {
+                        console.error('Logout error:', error);
                     }
                 }
             }

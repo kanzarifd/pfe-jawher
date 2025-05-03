@@ -5,7 +5,8 @@ const { checkClientAuth,checkAuth } = require('../middleware/auth');
 
 router.get('/', checkClientAuth, (req, res) => {
     const query = `
-        SELECT a.*, u.nom, u.email, u.photo_profile 
+        SELECT a.*, u.nom, u.email, u.photo_profile, u.telephone,
+               a.facebook, a.instagram, a.linkedin
         FROM artisans a 
         JOIN utilisateurs u ON a.utilisateur_id = u.id
         WHERE u.rôle = 'artisan'
@@ -20,21 +21,130 @@ router.get('/', checkClientAuth, (req, res) => {
             });
         }
 
+        // Get distinct gouvernorats
+        const gouvernoratQuery = `
+            SELECT DISTINCT gouvernorat 
+            FROM utilisateurs 
+            WHERE rôle = 'artisan' 
+            ORDER BY gouvernorat ASC
+        `;
+
+        db.query(gouvernoratQuery, (err, gouvernorats) => {
+            if (err) {
+                console.error('Error fetching gouvernorats:', err);
+                gouvernorats = [];
+            }
+
+            // Get distinct cities
+            const villeQuery = `
+                SELECT DISTINCT ville 
+                FROM utilisateurs 
+                WHERE rôle = 'artisan' 
+                ORDER BY ville ASC
+            `;
+
+            db.query(villeQuery, (err, villes) => {
+                if (err) {
+                    console.error('Error fetching villes:', err);
+                    villes = [];
+                }
+
+                const formattedArtisans = artisans.map(artisan => ({
+                    id: artisan.id,
+                    nom: artisan.nom,
+                    email: artisan.email,
+                    telephone: artisan.telephone,
+                    spécialité: artisan.spécialité,
+                    localisation: artisan.localisation,
+                    rating: artisan.rating || 0,
+                    disponibilité: artisan.disponibilité || false,
+                    expérience: artisan.expérience,
+                    photo_profile: artisan.photo_profile ? Buffer.from(artisan.photo_profile).toString('base64') : null,
+                    facebook: artisan.facebook,
+                    instagram: artisan.instagram,
+                    linkedin: artisan.linkedin
+                }));
+
+                res.render('client/index', { 
+                    title: 'TN M3allim - Client',
+                    artisans: formattedArtisans,
+                    gouvernorats: gouvernorats,
+                    villes: villes
+                });
+            });
+        });
+    });
+});
+
+// Get cities by gouvernorat
+router.get('/cities/:gouvernorat', (req, res) => {
+    const gouvernorat = req.params.gouvernorat;
+    const query = `
+        SELECT DISTINCT ville 
+        FROM utilisateurs 
+        WHERE rôle = 'artisan' 
+        AND gouvernorat = ?
+        AND ville IS NOT NULL 
+        AND ville != ''
+        ORDER BY ville ASC
+    `;
+
+    db.query(query, [gouvernorat], (err, results) => {
+        if (err) {
+            console.error('Error fetching cities:', err);
+            return res.json([]);
+        }
+        res.json(results);
+    });
+});
+
+// Filter artisans
+router.get('/filter', (req, res) => {
+    const { gouvernorat, ville, speciality } = req.query;
+    let query = `
+        SELECT a.*, u.nom, u.email, u.photo_profile, u.gouvernorat, u.ville, u.telephone
+        FROM artisans a 
+        JOIN utilisateurs u ON a.utilisateur_id = u.id
+        WHERE u.rôle = 'artisan'
+    `;
+    const params = [];
+
+    if (gouvernorat) {
+        query += ' AND u.gouvernorat = ?';
+        params.push(gouvernorat);
+    }
+    if (ville) {
+        query += ' AND u.ville = ?';
+        params.push(ville);
+    }
+    if (speciality) {
+        query += ' AND a.spécialité LIKE ?';
+        params.push(`%${speciality}%`);
+    }
+
+    query += ' ORDER BY a.rating DESC, u.nom ASC';
+
+    db.query(query, params, (err, artisans) => {
+        if (err) {
+            console.error('Error filtering artisans:', err);
+            return res.json([]);
+        }
+
         const formattedArtisans = artisans.map(artisan => ({
             id: artisan.id,
             nom: artisan.nom,
+            email: artisan.email,
+            telephone: artisan.telephone,
             spécialité: artisan.spécialité,
-            localisation: artisan.localisation,
+            gouvernorat: artisan.gouvernorat,
+            ville: artisan.ville,
             rating: artisan.rating || 0,
             disponibilité: artisan.disponibilité || false,
             expérience: artisan.expérience,
             photo_profile: artisan.photo_profile ? Buffer.from(artisan.photo_profile).toString('base64') : null
         }));
 
-        res.render('client/index', { 
-            title: 'TN M3allim - Client',
-            artisans: formattedArtisans
-        });
+        res.json(formattedArtisans);
     });
 });
 

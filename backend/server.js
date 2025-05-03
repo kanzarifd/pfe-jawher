@@ -16,6 +16,7 @@ const clientRoutes = require('./routes/client');
 const profileRoutes = require('./routes/profile');
 const contactRoutes = require('./routes/contact');
 const generalRoutes = require('./routes/general');
+const userRoutes = require('./routes/user');
 
 // Database connection (no longer needed with pool, but keep for backward compatibility)
 // db.connect((err) => {
@@ -90,6 +91,7 @@ app.use('/client', clientRoutes);
 app.use('/profile', profileRoutes);
 app.use('/contact-us', contactRoutes);
 app.use('/auth', authRoutes);
+app.use('/', userRoutes); 
 // Make artisan routes accessible from root path as well
 app.use('/', artisanRoutes);
 // Make profile routes accessible from root path as well

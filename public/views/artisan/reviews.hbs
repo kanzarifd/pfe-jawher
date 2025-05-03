@@ -46,8 +46,9 @@
                         <div class="bg-white p-6 rounded-xl shadow-sm">
                             <div class="flex items-start justify-between">
                                 <div class="flex items-center">
-                                    <img :src="review.clientPhoto || '/img/avatar-default.png'" 
-                                         class="w-12 h-12 rounded-full object-cover">
+                                    <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg" 
+                                         x-text="getInitials(review.clientName)">
+                                    </div>
                                     <div class="mr-4">
                                         <h3 class="font-semibold text-slate-800" x-text="review.clientName"></h3>
                                         <p class="text-sm text-gray-500" x-text="formatDate(review.createdAt)"></p>
@@ -99,11 +100,24 @@
                 },
 
                 formatDate(dateString) {
-                    return new Date(dateString).toLocaleDateString('ar-TN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                    });
+                    try {
+                        const date = new Date(dateString);
+                        return new Intl.DateTimeFormat('ar-TN', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }).format(date);
+                    } catch (error) {
+                        console.error('Error formatting date:', error);
+                        return 'تاريخ غير صالح';
+                    }
+                },
+
+                getInitials(name) {
+                    const names = name.split(' ');
+                    return names[0][0] + (names.length > 1 ? names[names.length - 1][0] : '');
                 }
             }
         }

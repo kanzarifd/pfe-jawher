@@ -21,6 +21,31 @@ const getUserData = async (userId) => {
     return userData;
 };
 
+// Add service
+router.post('/services', checkArtisanAuth, async (req, res) => {
+    try {
+        const { serviceType } = req.body;
+        const userId = req.session.userId;
+
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ error: 'Artisan not found' });
+        }
+
+        // Update the artisan's specialty
+        const updateQuery = `UPDATE artisans SET spécialité = ? WHERE id = ?`;
+        await db.promise().query(updateQuery, [serviceType, artisanResult[0].id]);
+        
+        res.json({ success: true, message: 'تم تحديث التخصص بنجاح' });
+    } catch (error) {
+        console.error('Error updating specialty:', error);
+        res.status(500).json({ error: 'Error updating specialty' });
+    }
+});
+
 // Route pour la page artisan
 router.get('/', checkArtisanAuth, async (req, res) => {
     try {
@@ -94,20 +119,22 @@ router.get('/get-artisan/:id', async (req, res) => {
 router.get('/get-reviews/:artisanId', async (req, res) => {
     try {
         const query = `
-            SELECT r.*, u.nom as user_name, u.photo_profile as user_photo
+            SELECT r.*, u.nom as user_name
             FROM reviews r 
             JOIN utilisateurs u ON r.user_id = u.id 
-            WHERE r.artisan_id = ? 
+            WHERE r.artisan_id = ?
             ORDER BY r.created_at DESC
         `;
         
-        const [results] = await db.promise().query(query, [req.params.artisanId]);
-        res.json(results.map(review => {
-            if (review.user_photo) {
-                review.user_photo = `data:image/jpeg;base64,${review.user_photo.toString('base64')}`;
-            }
-            return review;
-        }));
+        const [reviews] = await db.promise().query(query, [req.params.artisanId]);
+        
+        res.json(reviews.map(review => ({
+            id: review.id,
+            user_name: review.user_name,
+            rating: review.rating,
+            review_text: review.review_text,
+            created_at: review.created_at
+        })));
     } catch (error) {
         console.error('Error fetching reviews:', error);
         res.status(500).json({ error: 'Error fetching reviews' });
@@ -121,16 +148,22 @@ router.post('/submit-review', checkAuth, async (req, res) => {
         
         // Check if user is logged in
         if (!req.session.userId) {
-            return res.status(401).json({ error: 'Please login to submit a review' });
+            return res.status(401).json({ error: 'يجب تسجيل الدخول لإضافة تقييم' });
         }
 
-        const query = `
-            INSERT INTO reviews (user_id, artisan_id, rating, review_text, created_at) 
+        // Insert the review
+        const insertQuery = `
+            INSERT INTO reviews (user_id, artisan_id, rating, review_text, created_at)
             VALUES (?, ?, ?, ?, NOW())
         `;
         
-        const [results] = await db.promise().query(query, [req.session.userId, artisanId, rating, review]);
-        
+        await db.promise().query(insertQuery, [
+            req.session.userId,
+            artisanId,
+            rating,
+            review
+        ]);
+
         // Update artisan's average rating
         const updateRatingQuery = `
             UPDATE artisans 
@@ -154,16 +187,17 @@ router.post('/submit-review', checkAuth, async (req, res) => {
 // Book an artisan
 router.post('/book-artisan', checkAuth, async (req, res) => {
     try {
-        const { artisanId, date, time, notes } = req.body;
+        const { artisanId, date, time, notes, phone } = req.body;
         const userId = req.session.userId;
 
         const query = `
-            INSERT INTO bookings (user_id, artisan_id, booking_date, booking_time, notes) 
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO bookings (user_id, artisan_id, booking_date, booking_time, notes, client_number, status, is_read, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, NOW())
         `;
-        
-        const [results] = await db.promise().query(query, [userId, artisanId, date, time, notes]);
-        res.json({ success: true });
+
+        await db.promise().query(query, [userId, artisanId, date, time, notes, phone]);
+
+        res.json({ success: true, message: 'تم حجز الموعد بنجاح' });
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Error booking artisan' });
@@ -254,37 +288,100 @@ router.get('/profile', checkArtisanAuth, async (req, res) => {
     }
 });
 
-// Update profile
-router.post('/profile/update', checkArtisanAuth, async (req, res) => {
+// Get profile data
+router.get('/profile/data', checkArtisanAuth, async (req, res) => {
     try {
-        const { fullname, phone, address, profession, experience, hourly_rate, description } = req.body;
-        
-        // Update user table
-        const updateUserQuery = `
-            UPDATE utilisateurs 
-            SET nom = ?, téléphone = ?, adresse = ?
-            WHERE id = ?
+        const query = `
+            SELECT u.*, a.spécialité, a.expérience, a.localisation, a.description, 
+                   a.tarif_horaire, a.facebook, a.instagram, a.linkedin
+            FROM utilisateurs u
+            LEFT JOIN artisans a ON u.id = a.utilisateur_id
+            WHERE u.id = ?
         `;
         
-        await db.promise().query(updateUserQuery, [fullname, phone, address, req.session.userId]);
-
-        // Update artisan table
-        const updateArtisanQuery = `
-            UPDATE artisans 
-            SET métier = ?, années_expérience = ?, tarif_horaire = ?, description = ?
-            WHERE utilisateur_id = ?
-        `;
+        const [rows] = await db.promise().query(query, [req.session.userId]);
+        const userData = rows[0];
         
-        await db.promise().query(updateArtisanQuery, 
-            [profession, experience, hourly_rate, description, req.session.userId]
-        );
+        if (userData.photo_profile) {
+            userData.photo_profile = `data:image/jpeg;base64,${userData.photo_profile.toString('base64')}`;
+        }
         
-        res.json({ 
-            success: true, 
-            message: 'تم تحديث الملف الشخصي بنجاح' 
-        });
+        res.json(userData);
     } catch (error) {
         console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update profile
+router.post('/update-profile', checkArtisanAuth, async (req, res) => {
+    try {
+        console.log('Received data:', req.body);
+
+        const { fullname, phone, address, profession, experience, hourly_rate, description, facebook, instagram, linkedin } = req.body;
+        
+        // Start transaction
+        const connection = await db.promise().getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Update user table
+            const userQuery = `
+                UPDATE utilisateurs 
+                SET nom = ?, telephone = ?
+                WHERE id = ?
+            `;
+            await connection.query(userQuery, [fullname, phone, req.session.userId]);
+
+            // Update artisan table with simple text fields
+            const artisanQuery = `
+                UPDATE artisans 
+                SET spécialité = ?, 
+                    expérience = ?, 
+                    localisation = ?,
+                    description = ?,
+                    tarif_horaire = ?,
+                    facebook = ?,
+                    instagram = ?,
+                    linkedin = ?
+                WHERE utilisateur_id = ?
+            `;
+            
+            // Convert empty strings to null for database
+            const fbValue = facebook?.trim() || null;
+            const igValue = instagram?.trim() || null;
+            const liValue = linkedin?.trim() || null;
+
+            await connection.query(artisanQuery, [
+                profession, 
+                experience, 
+                address, 
+                description, 
+                hourly_rate,
+                fbValue,
+                igValue,
+                liValue,
+                req.session.userId
+            ]);
+
+            // Commit transaction
+            await connection.commit();
+            
+            console.log('Profile updated successfully');
+
+            res.json({ 
+                success: true, 
+                message: 'تم تحديث الملف الشخصي بنجاح' 
+            });
+        } catch (error) {
+            // Rollback on error
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
         res.status(500).json({ 
             success: false, 
             message: 'حدث خطأ أثناء تحديث الملف الشخصي' 
@@ -292,7 +389,7 @@ router.post('/profile/update', checkArtisanAuth, async (req, res) => {
     }
 });
 
-// Add reviews page route
+// Get artisan reviews page
 router.get('/reviews', checkArtisanAuth, async (req, res) => {
     try {
         const userData = await getUserData(req.session.userId);
@@ -312,13 +409,14 @@ router.get('/reviews', checkArtisanAuth, async (req, res) => {
     }
 });
 
-// Get artisan's reviews data
+// Get artisan reviews data
 router.get('/reviews/data', checkArtisanAuth, async (req, res) => {
     try {
+        const userId = req.session.userId;
+
         // First get artisan_id
-        const getArtisanIdQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
-        
-        const [artisanResult] = await db.promise().query(getArtisanIdQuery, [req.session.userId]);
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [userId]);
         
         if (artisanResult.length === 0) {
             return res.status(404).json({ error: 'Artisan not found' });
@@ -326,10 +424,13 @@ router.get('/reviews/data', checkArtisanAuth, async (req, res) => {
 
         const artisanId = artisanResult[0].id;
 
-        // Then get reviews with user information
+        // Get total reviews count
+        const countQuery = `SELECT COUNT(*) as total FROM reviews WHERE artisan_id = ?`;
+        const [countResult] = await db.promise().query(countQuery, [artisanId]);
+
+        // Get reviews with user info including photo
         const reviewsQuery = `
-            SELECT 
-                r.*, u.nom as client_name, u.photo_profile as client_photo
+            SELECT r.*, u.nom as clientName
             FROM reviews r
             JOIN utilisateurs u ON r.user_id = u.id
             WHERE r.artisan_id = ?
@@ -337,16 +438,20 @@ router.get('/reviews/data', checkArtisanAuth, async (req, res) => {
         `;
 
         const [reviews] = await db.promise().query(reviewsQuery, [artisanId]);
-        
+
+        // Format reviews data
         res.json({
-            reviews: reviews.map(review => ({
-                id: review.id,
-                rating: review.rating,
-                comment: review.review_text,
-                clientName: review.client_name,
-                clientPhoto: review.client_photo ? `data:image/jpeg;base64,${review.client_photo.toString('base64')}` : '/img/avatar-placeholder.png',
-                createdAt: review.created_at
-            }))
+            totalReviews: countResult[0].total,
+            reviews: reviews.map(review => {
+                const date = new Date(review.created_at);
+                return {
+                    id: review.id,
+                    clientName: review.clientName,
+                    rating: review.rating,
+                    comment: review.review_text,
+                    createdAt: date.toISOString()
+                };
+            })
         });
     } catch (error) {
         console.error('Error fetching reviews:', error);
@@ -720,26 +825,6 @@ router.get('/report', checkArtisanAuth, async (req, res) => {
                 photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
             },
             active: 'report'
-        });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).send('Internal Server Error');
-    }
-});
-
-// Update the reviews route
-router.get('/reviews', checkArtisanAuth, async (req, res) => {
-    try {
-        const userData = await getUserData(req.session.userId);
-        res.render('artisan/reviews', {
-            title: 'التقييمات - TN M3allim',
-            user: {
-                id: req.session.userId,
-                role: req.session.userRole,
-                name: req.session.userName,
-                photo_profile: userData.photo_profile || '/img/avatar-placeholder.png'
-            },
-            active: 'reviews'
         });
     } catch (error) {
         console.error('Error:', error);
