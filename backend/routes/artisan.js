@@ -75,9 +75,16 @@ router.get('/get-artisans', async (req, res) => {
             FROM artisans a 
             JOIN utilisateurs u ON a.utilisateur_id = u.id
             WHERE u.rôle = 'artisan'
+            AND (? = '' OR u.gouvernorat = ?)
+            AND (? = '' OR u.ville = ?)
         `;
         
-        const [results] = await db.promise().query(query);
+        const [results] = await db.promise().query(query, [
+            req.query.gouvernorat || '', 
+            req.query.gouvernorat || '',
+            req.query.ville || '',
+            req.query.ville || ''
+        ]);
         res.json(results);
     } catch (error) {
         console.error('Error fetching artisans:', error);

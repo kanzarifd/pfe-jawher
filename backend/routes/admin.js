@@ -93,11 +93,10 @@ router.get('/client-list', checkAdminAuth, async (req, res) => {
                 u.email, 
                 u.telephone,
                 u.gouvernorat,
-                u.created_at,
                 u.active
             FROM utilisateurs u
             WHERE u.rôle = 'client'
-            ORDER BY u.created_at DESC
+            ORDER BY u.id DESC
         `;
 
         db.query(query, (err, clients) => {
@@ -143,6 +142,20 @@ router.get('/client-list', checkAdminAuth, async (req, res) => {
 // Artisan list page
 router.get('/artisan-list', checkAdminAuth, async (req, res) => {
     try {
+        // First get the statistics
+        const statsQuery = `
+            SELECT 
+                COUNT(*) as totalArtisans,
+                SUM(CASE WHEN u.active = TRUE THEN 1 ELSE 0 END) as activeArtisans,
+                COALESCE(AVG(r.rating), 0) as avgRating
+            FROM utilisateurs u
+            LEFT JOIN artisans a ON u.id = a.utilisateur_id
+            LEFT JOIN reviews r ON a.id = r.artisan_id
+            WHERE u.rôle = 'artisan'
+        `;
+
+        const [stats] = await db.promise().query(statsQuery);
+
         const query = `
             SELECT 
                 u.id, 
@@ -150,47 +163,28 @@ router.get('/artisan-list', checkAdminAuth, async (req, res) => {
                 u.email, 
                 u.telephone,
                 u.gouvernorat,
-                u.created_at,
                 u.active,
-                u.métier,
-                (SELECT COUNT(*) FROM ratings r WHERE r.artisan_id = u.id) as total_ratings,
-                (SELECT AVG(rating) FROM ratings r WHERE r.artisan_id = u.id) as avg_rating
+                a.spécialité,
+                (SELECT AVG(rating) FROM reviews r WHERE r.artisan_id = a.id) as avg_rating
             FROM utilisateurs u
+            LEFT JOIN artisans a ON u.id = a.utilisateur_id
             WHERE u.rôle = 'artisan'
-            ORDER BY u.created_at DESC
+            ORDER BY u.id DESC
         `;
 
-        db.query(query, (err, artisans) => {
-            if (err) {
-                console.error('Error fetching artisans:', err);
-                return res.render('artisan-list/index', {
-                    title: 'قائمة الحرفيين',
-                    error: 'حدث خطأ في جلب بيانات الحرفيين',
-                    user: {
-                        id: req.session.userId,
-                        role: req.session.userRole,
-                        name: req.session.userName
-                    }
-                });
+        const [artisans] = await db.promise().query(query);
+
+        res.render('artisan-list/index', {
+            title: 'قائمة الحرفيين',
+            artisans,
+            totalArtisans: stats[0].totalArtisans,
+            activeArtisans: stats[0].activeArtisans,
+            avgRating: parseFloat(stats[0].avgRating || 0).toFixed(1),
+            user: {
+                id: req.session.userId,
+                role: req.session.userRole,
+                name: req.session.userName
             }
-
-            // Format the ratings
-            artisans = artisans.map(artisan => ({
-                ...artisan,
-                avg_rating: artisan.avg_rating ? parseFloat(artisan.avg_rating).toFixed(1) : '0.0'
-            }));
-
-            res.render('artisan-list/index', {
-                title: 'قائمة الحرفيين',
-                artisans: artisans,
-                totalArtisans: artisans.length,
-                activeArtisans: artisans.filter(a => a.active).length,
-                user: {
-                    id: req.session.userId,
-                    role: req.session.userRole,
-                    name: req.session.userName
-                }
-            });
         });
     } catch (error) {
         console.error('Error:', error);
@@ -253,13 +247,69 @@ router.post('/client/:id/delete', checkAdminAuth, (req, res) => {
 
 // Admin dashboard (protected route)
 router.get('/dashboard', checkAdminAuth, (req, res) => {
-    res.render('dashbord/index', {
+    res.render('admin/index', {
         title: 'لوحة التحكم',
         user: {
             id: req.session.userId,
             role: req.session.userRole,
             name: req.session.userName
         }
+    });
+});
+
+// Admin dashboard data endpoint
+router.get('/dashboard-data', checkAdminAuth, (req, res) => {
+    // Get statistics
+    const statsQuery = `
+        SELECT 
+            (SELECT COUNT(*) FROM utilisateurs) as totalUsers,
+            (SELECT COUNT(*) FROM utilisateurs WHERE rôle = 'client') as clients,
+            (SELECT COUNT(*) FROM utilisateurs WHERE rôle = 'artisan') as artisans,
+            (SELECT COUNT(*) FROM reports) as messages
+    `;
+
+    // Get reports
+    const reportsQuery = `
+        SELECT 
+            id,
+            artisan_id,
+            navigation_issue,
+            design_issue,
+            comments,
+            created_at
+        FROM reports
+        ORDER BY id DESC
+        LIMIT 10
+    `;
+
+    db.query(statsQuery, (err, statsResults) => {
+        if (err) {
+            console.error('Error fetching statistics:', err);
+            return res.status(500).json({
+                totalUsers: 0,
+                clients: 0,
+                artisans: 0,
+                messages: 0,
+                reports: [],
+                error: 'Error fetching statistics'
+            });
+        }
+
+        db.query(reportsQuery, (err, reportsResults) => {
+            if (err) {
+                console.error('Error fetching reports:', err);
+                return res.status(500).json({
+                    ...statsResults[0],
+                    reports: [],
+                    error: 'Error fetching reports'
+                });
+            }
+
+            res.json({
+                ...statsResults[0],
+                reports: reportsResults
+            });
+        });
     });
 });
 
@@ -349,7 +399,8 @@ router.get('/artisan-list', checkAdminAuth, (req, res) => {
             COUNT(DISTINCT u.id) as activeArtisans,
             COALESCE(AVG(r.rating), 0) as avgRating
         FROM utilisateurs u
-        LEFT JOIN reviews r ON u.id = r.artisan_id
+        LEFT JOIN artisans a ON u.id = a.utilisateur_id
+        LEFT JOIN reviews r ON a.id = r.artisan_id
         WHERE u.rôle = 'artisan'
     `;
 
@@ -468,7 +519,7 @@ router.post('/settings/change-password', checkAdminAuth, async (req, res) => {
 // User Messages route - update the path
 router.get('/user-messages', checkAdminAuth, async (req, res) => {
     try {
-        const query = 'SELECT id, nom, email, num_tel as phone, message, DATE_FORMAT(created_at, "%Y-%m-%d %H:%i") as created_at FROM enquete ORDER BY created_at DESC';
+        const query = 'SELECT id, nom, email, num_tel as phone, message, DATE_FORMAT(created_at, "%Y-%m-%d %H:%i") as created_at FROM enquete ORDER BY id DESC';
         db.query(query, (err, results) => {
             if (err) {
                 console.error('Error fetching enquete messages:', err);
@@ -516,7 +567,7 @@ router.delete('/user-messages/:id', checkAdminAuth, (req, res) => {
 
 // Route to fetch all enquete messages for admin user-messages page
 router.get('/user-messages/enquete', checkAdminAuth, (req, res) => {
-    const query = 'SELECT id, nom, email, num_tel, message, created_at FROM enquete ORDER BY created_at DESC';
+    const query = 'SELECT id, nom, email, num_tel, message, created_at FROM enquete ORDER BY id DESC';
     db.query(query, (err, results) => {
         if (err) {
             console.error('Error fetching enquete messages:', err);
@@ -574,7 +625,7 @@ router.get('/user-messages/all', checkAdminAuth, (req, res) => {
 
 // Route to fetch only enquete messages for admin user-messages page (and pass as 'messages')
 router.get('/user-messages/enquete-messages', checkAdminAuth, (req, res) => {
-    const query = 'SELECT id, nom, email, num_tel as phone, message, created_at FROM enquete ORDER BY created_at DESC';
+    const query = 'SELECT id, nom, email, num_tel as phone, message, created_at FROM enquete ORDER BY id DESC';
     db.query(query, (err, results) => {
         if (err) {
             console.error('Error fetching enquete messages:', err);

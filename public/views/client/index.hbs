@@ -566,17 +566,17 @@
                                     <div class="flex items-center space-x-4 mt-4">
                                         {{#if this.facebook}}
                                         <a href="{{this.facebook}}" target="_blank" class="text-blue-600 hover:text-blue-800">
-                                            <i class="fab fa-facebook-f text-xl"></i>
+                                            <i class="fab fa-facebook-f text-2xl"></i>
                                         </a>
                                         {{/if}}
                                         {{#if this.instagram}}
                                         <a href="{{this.instagram}}" target="_blank" class="text-pink-600 hover:text-pink-800">
-                                            <i class="fab fa-instagram text-xl"></i>
+                                            <i class="fab fa-instagram text-2xl"></i>
                                         </a>
                                         {{/if}}
                                         {{#if this.linkedin}}
                                         <a href="{{this.linkedin}}" target="_blank" class="text-blue-700 hover:text-blue-900">
-                                            <i class="fab fa-linkedin-in text-xl"></i>
+                                            <i class="fab fa-linkedin-in text-2xl"></i>
                                         </a>
                                         {{/if}}
                                     </div>
@@ -762,20 +762,20 @@
                     <i class="fas fa-map-marker-alt w-6"></i>
                     <span id="artisanLocation">${artisan.localisation || 'غير متوفر'}</span>
                 </p>
-                <div class="flex items-center space-x-4 mt-4">
+                <div class="flex items-center gap-6 mt-4 rtl:space-x-reverse">
                     ${artisan.facebook ? `
                         <a href="${artisan.facebook}" target="_blank" class="text-blue-600 hover:text-blue-800">
-                            <i class="fab fa-facebook-f text-xl"></i>
+                            <i class="fab fa-facebook-f text-2xl"></i>
                         </a>
                     ` : ''}
                     ${artisan.instagram ? `
                         <a href="${artisan.instagram}" target="_blank" class="text-pink-600 hover:text-pink-800">
-                            <i class="fab fa-instagram text-xl"></i>
+                            <i class="fab fa-instagram text-2xl"></i>
                         </a>
                     ` : ''}
                     ${artisan.linkedin ? `
                         <a href="${artisan.linkedin}" target="_blank" class="text-blue-700 hover:text-blue-900">
-                            <i class="fab fa-linkedin-in text-xl"></i>
+                            <i class="fab fa-linkedin-in text-2xl"></i>
                         </a>
                     ` : ''}
                 </div>
@@ -1168,8 +1168,7 @@
                             ${artisan.photo_profile ? `
                                 <img class="h-10 w-10 rounded-full object-cover" 
                                      src="data:image/jpeg;base64,${artisan.photo_profile}" 
-                                     alt="صورة الحرفي"
-                                     onerror="this.src='/img/avatar-default.png'">
+                                     alt="صورة الحرفي">
                             ` : `
                                 <div class="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
                                     ${artisan.nom[0]}

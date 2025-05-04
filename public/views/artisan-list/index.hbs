@@ -161,104 +161,108 @@
             });
           });
 
-            var table = $('#artisanTable').DataTable({
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
-                },
-                ajax: {
-                    url: "/admin/users-data",
-                    data: function(d) {
-                        d.role = 'artisan';  // Add role parameter
-                    },
-                    dataSrc: function(json) {
-                        return json.map(function(item) {
-                            return {
-                                ...item,
-                                rating: parseFloat(item.rating || 0).toFixed(1),
-                                specialite: item.specialite || 'غير محدد'
-                            };
-                        });
-                    }
-                },
-                columns: [
-                    { 
-                        data: null,
-                        render: function(data, type, row, meta) {
-                            return `<span class="font-semibold text-slate-600">${meta.row + 1}</span>`;
-                        }
-                    },
-                    { 
-                        data: "nom",
-                        render: function(data, type, row) {
-                            return `<div class="font-medium text-slate-800">${data || ''}</div>`;
-                        }
-                    },
-                    { 
-                        data: "email",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || ''}</div>`;
-                        }
-                    },
-                    { 
-                        data: "specialite",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير محدد'}</div>`;
-                        }
-                    },
-                    { 
-                        data: "rating",
-                        render: function(data, type, row) {
-                            const rating = parseFloat(data || 0);
-                            const fullStars = Math.floor(rating);
-                            const hasHalfStar = rating % 1 >= 0.5;
-                            let stars = '★'.repeat(fullStars);
-                            if (hasHalfStar) stars += '½';
-                            stars += '☆'.repeat(5 - Math.ceil(rating));
-                            return `<div class="text-yellow-500">${stars} (${rating})</div>`;
-                        }
-                    },
-                    {
-                        data: null,
-                        render: function(data, type, row) {
-                            return `
-                                <div class="flex justify-end gap-3">
-                                    <button onclick="viewArtisan('${row.id}')" 
-                                        class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-md transition-colors duration-200">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button onclick="deleteArtisan('${row.id}')" 
-                                        class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            `;
-                        }
-                    }
-                ],
-                responsive: true,
-                order: [[0, 'asc']],
-                pageLength: 10
+            $.ajax({
+                url: '/js/ar.json',
+                dataType: 'json',
+                success: function(lang) {
+                    var table = $('#artisanTable').DataTable({
+                        language: lang,
+                        ajax: {
+                            url: "/admin/users-data",
+                            data: function(d) {
+                                d.role = 'artisan';  // Add role parameter
+                            },
+                            dataSrc: function(json) {
+                                return json.map(function(item) {
+                                    return {
+                                        ...item,
+                                        rating: parseFloat(item.rating || 0).toFixed(1),
+                                        specialite: item.specialite || 'غير محدد'
+                                    };
+                                });
+                            }
+                        },
+                        columns: [
+                            { 
+                                data: null,
+                                render: function(data, type, row, meta) {
+                                    return `<span class="font-semibold text-slate-600">${meta.row + 1}</span>`;
+                                }
+                            },
+                            { 
+                                data: "nom",
+                                render: function(data, type, row) {
+                                    return `<div class="font-medium text-slate-800">${data || ''}</div>`;
+                                }
+                            },
+                            { 
+                                data: "email",
+                                render: function(data, type, row) {
+                                    return `<div class="text-slate-600">${data || ''}</div>`;
+                                }
+                            },
+                            { 
+                                data: "specialite",
+                                render: function(data, type, row) {
+                                    return `<div class="text-slate-600">${data || 'غير محدد'}</div>`;
+                                }
+                            },
+                            { 
+                                data: "rating",
+                                render: function(data, type, row) {
+                                    const rating = parseFloat(data || 0);
+                                    const fullStars = Math.floor(rating);
+                                    const hasHalfStar = rating % 1 >= 0.5;
+                                    let stars = '★'.repeat(fullStars);
+                                    if (hasHalfStar) stars += '½';
+                                    stars += '☆'.repeat(5 - Math.ceil(rating));
+                                    return `<div class="text-yellow-500">${stars} (${rating})</div>`;
+                                }
+                            },
+                            {
+                                data: null,
+                                render: function(data, type, row) {
+                                    return `
+                                        <div class="flex justify-end gap-3">
+                                            <button onclick="viewArtisan('${row.id}')" 
+                                                class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-md transition-colors duration-200">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button onclick="deleteArtisan('${row.id}')" 
+                                                class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    `;
+                                }
+                            }
+                        ],
+                        responsive: true,
+                        order: [[0, 'asc']],
+                        pageLength: 10
+                    });
+                }
             });
-        });
 
-        function viewArtisan(id) {
-            window.location.href = `/admin/artisan/${id}`;
-        }
-
-        function deleteArtisan(id) {
-            if (confirm('هل أنت متأكد من حذف هذا الحرفي؟')) {
-                fetch(`/admin/artisan/${id}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        $('#artisanTable').DataTable().ajax.reload();
-                    }
-                })
-                .catch(error => console.error('Error:', error));
+            function viewArtisan(id) {
+                window.location.href = `/admin/artisan/${id}`;
             }
-        }
+
+            function deleteArtisan(id) {
+                if (confirm('هل أنت متأكد من حذف هذا الحرفي؟')) {
+                    fetch(`/admin/artisan/${id}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            $('#artisanTable').DataTable().ajax.reload();
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            }
+        });
     </script>
 </body>
 </html>
