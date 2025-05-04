@@ -26,10 +26,32 @@ router.get('/signup', (req, res) => {
 
 // Inscription d'un utilisateur
 router.post('/signup', (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, date_naissance, telephone, adresse, gouvernorat, ville, code_postal } = req.body;
 
-    if (!name || !email || !password || !role) {
-        return res.json({ success: false, message: 'Toutes les informations sont requises' });
+    // Validate required fields
+    if (!name || !email || !password || !role || !date_naissance || !telephone || !adresse || !gouvernorat || !ville || !code_postal) {
+        return res.json({ success: false, message: 'جميع الحقول مطلوبة' });
+    }
+
+    // Validate phone number
+    if (telephone.length !== 8 || !/^\d+$/.test(telephone)) {
+        return res.json({ success: false, message: 'رقم الهاتف غير صالح' });
+    }
+
+    // Validate postal code
+    if (code_postal.length !== 4 || !/^\d+$/.test(code_postal)) {
+        return res.json({ success: false, message: 'الرمز البريدي غير صالح' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+        return res.json({ success: false, message: 'صيغة البريد الإلكتروني غير صحيحة' });
+    }
+
+    // Validate password length
+    if (password.length < 8) {
+        return res.json({ success: false, message: 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل' });
     }
 
     // Vérifier si l'utilisateur existe déjà
@@ -40,7 +62,7 @@ router.post('/signup', (req, res) => {
         }
 
         if (results.length > 0) {
-            return res.json({ success: false, message: 'Cet utilisateur existe déjà !' });
+            return res.json({ success: false, message: 'هذا البريد الإلكتروني مستخدم بالفعل' });
         }
 
         // Hachage du mot de passe
@@ -51,17 +73,17 @@ router.post('/signup', (req, res) => {
             }
 
             // Insertion dans la base de données
-            const query = 'INSERT INTO utilisateurs (nom, email, mot_de_passe, rôle) VALUES (?, ?, ?, ?)';
-            db.query(query, [name, email, hashedPassword, role], (err) => {
+            const query = 'INSERT INTO utilisateurs (nom, email, mot_de_passe, rôle, date_naissance, telephone, adresse, gouvernorat, ville, code_postal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            db.query(query, [name, email, hashedPassword, role, date_naissance, telephone, adresse, gouvernorat, ville, code_postal], (err) => {
                 if (err) {
                     console.error('Erreur lors de l\'ajout de l\'utilisateur:', err);
                     return res.status(500).json({ success: false, message: 'Erreur serveur' });
                 }
 
-                res.json({ success: true, message: 'Utilisateur ajouté avec succès' });
+                res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
             });
         });
-   });
+    });
 });
 
 // Connexion d'un utilisateur
@@ -297,6 +319,41 @@ router.get('/add-last-login-column', (req, res) => {
             return res.send('Error adding last_login column: ' + err.message);
         }
         res.send("'last_login' column added successfully!");
+    });
+});
+
+// Add date_naissance column to utilisateurs table if it doesn't exist
+router.get('/add-date-naissance-column', (req, res) => {
+    const alterQuery = `ALTER TABLE utilisateurs ADD COLUMN date_naissance DATE DEFAULT NULL`;
+    db.query(alterQuery, (err, result) => {
+        if (err) {
+            if (err.code === 'ER_DUP_FIELDNAME') {
+                return res.send("'date_naissance' column already exists.");
+            }
+            console.error('Error adding date_naissance column:', err);
+            return res.send('Error adding date_naissance column: ' + err.message);
+        }
+        res.send("'date_naissance' column added successfully!");
+    });
+});
+
+// Add new columns to utilisateurs table
+router.get('/add-new-columns', (req, res) => {
+    const alterQuery = `
+        ALTER TABLE utilisateurs 
+        ADD COLUMN IF NOT EXISTS telephone VARCHAR(20) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS adresse TEXT DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS gouvernorat VARCHAR(50) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS ville VARCHAR(50) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS code_postal VARCHAR(10) DEFAULT NULL;
+    `;
+    
+    db.query(alterQuery, (err, result) => {
+        if (err) {
+            console.error('Error adding new columns:', err);
+            return res.send('Error adding new columns: ' + err.message);
+        }
+        res.send('New columns added successfully!');
     });
 });
 

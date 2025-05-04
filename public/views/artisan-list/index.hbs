@@ -64,53 +64,6 @@
             </div>
         </div>
 
-        <!-- Add New User Modal -->
-        <div id="addUserModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
-          <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
-            <h3 class="text-xl font-semibold mb-4">إضافة مستخدم جديد</h3>
-            <form id="addUserForm" class="space-y-4">
-              <div>
-                <label class="block mb-1">الاسم</label>
-                <input type="text" name="nom" required class="w-full border rounded px-3 py-2">
-              </div>
-              <div>
-                <label class="block mb-1">البريد الإلكتروني</label>
-                <input type="email" name="email" required class="w-full border rounded px-3 py-2">
-              </div>
-              <div>
-                <label class="block mb-1">كلمة المرور</label>
-                <input type="password" name="mot_de_passe" required class="w-full border rounded px-3 py-2">
-              </div>
-              <div>
-                <label class="block mb-1">الدور</label>
-                <select name="rôle" required class="w-full border rounded px-3 py-2">
-                  <option value="artisan">حرفي</option>
-                </select>
-              </div>
-              <div class="flex justify-end gap-2">
-                <button type="button" id="closeAddUserModal" class="px-4 py-2 rounded bg-gray-300">إلغاء</button>
-                <button type="submit" class="px-4 py-2 rounded bg-yellow-500 text-white">إضافة</button>
-              </div>
-            </form>
-            <div id="addUserError" class="text-red-600 mt-2 hidden"></div>
-          </div>
-        </div>
-
-        <!-- Reviews Modal -->
-        <div id="reviewsModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-semibold">التقييمات</h3>
-                    <button id="closeReviewsModal" class="text-slate-500 hover:text-slate-700">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="reviewsList" class="space-y-4">
-                    <!-- Reviews will be inserted here -->
-                </div>
-            </div>
-        </div>
-
         <!-- Table Section -->
         <div class="bg-white rounded-lg shadow-sm">
             <div class="p-6">
@@ -119,10 +72,6 @@
                         <i class="fas fa-tools text-slate-400"></i>
                         <h3 class="text-lg font-semibold text-slate-800">جميع الحرفيين</h3>
                     </div>
-                    <button id="openAddUserModal" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200">
-                        <i class="fas fa-plus"></i>
-                        إضافة حرفي جديد
-                    </button>
                 </div>
 
                 <div class="overflow-x-auto bg-white rounded-lg">
@@ -133,7 +82,7 @@
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الاسم</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">البريد الإلكتروني</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">رقم الهاتف</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">العنوان</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">المحافظة</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الإجراءات</th>
                             </tr>
                         </thead>
@@ -147,179 +96,104 @@
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
 
     <script>
+        // Global functions
+        function deleteUser(userId, userName) {
+            if (confirm(`هل أنت متأكد من حذف المستخدم "${userName}"؟`)) {
+                fetch(`/admin/user/${userId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        $('#artisanTable').DataTable().ajax.reload();
+                        showNotification('تم حذف المستخدم بنجاح');
+                    } else {
+                        showNotification(data.error || 'حدث خطأ أثناء حذف المستخدم', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('حدث خطأ أثناء حذف المستخدم', 'error');
+                });
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notif = $('<div></div>')
+                .addClass(`fixed bottom-4 right-4 p-4 rounded-lg text-white ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} shadow-lg`)
+                .text(message);
+            
+            $('body').append(notif);
+            
+            setTimeout(() => {
+                notif.fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }, 3000);
+        }
+
         $(document).ready(function() {
-          $('#openAddUserModal').on('click', function() {
-            $('#addUserModal').removeClass('hidden');
-          });
-          $('#closeAddUserModal').on('click', function() {
-            $('#addUserModal').addClass('hidden');
-          });
-          $('#addUserForm').on('submit', function(e) {
-            e.preventDefault();
-            const formData = $(this).serialize();
-            $.ajax({
-              url: '/admin/create-user',
-              method: 'POST',
-              data: formData,
-              success: function(res) {
-                if (res.success) {
-                  $('#addUserError').addClass('hidden');
-                  $('#addUserModal').addClass('hidden');
-                  window.location.reload();
-                } else {
-                  $('#addUserError').removeClass('hidden').text(res.error || 'حدث خطأ أثناء الإضافة');
-                }
-              },
-              error: function(xhr) {
-                $('#addUserError').removeClass('hidden').text(xhr.responseJSON?.error || 'حدث خطأ أثناء الإضافة');
-              }
-            });
-          });
-
-            $.ajax({
-                url: '/js/ar.json',
-                dataType: 'json',
-                success: function(lang) {
-                    var table = $('#artisanTable').DataTable({
-                        language: lang,
-                        ajax: {
-                            url: '/admin/artisan-list/data',
-                            dataSrc: ''
-                        },
-                        columns: [
-                            { 
-                                data: null,
-                                render: function(data, type, row, meta) {
-                                    return `<span class="font-semibold text-slate-600">${meta.row + 1}</span>`;
-                                }
-                            },
-                            { 
-                                data: "nom",
-                                render: function(data, type, row) {
-                                    return `<div class="font-medium text-slate-800">${data || ''}</div>`;
-                                }
-                            },
-                            { 
-                                data: "email",
-                                render: function(data, type, row) {
-                                    return `<div class="text-slate-600">${data || ''}</div>`;
-                                }
-                            },
-                            { 
-                                data: "telephone",
-                                render: function(data, type, row) {
-                                    return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                                }
-                            },
-                            { 
-                                data: "adresse",
-                                render: function(data, type, row) {
-                                    return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                                }
-                            },
-                            {
-                                data: null,
-                                render: function(data, type, row) {
-                                    return `
-                                        <div class="flex justify-end gap-3">
-                                            <button onclick="viewArtisan('${row.id}')" 
-                                                class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-md transition-colors duration-200">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button onclick="deleteArtisan('${row.id}')" 
-                                                class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    `;
-                                }
-                            }
-                        ],
-                        responsive: true,
-                        order: [[0, 'asc']],
-                        pageLength: 10
-                    });
-                }
-            });
-
-            function viewArtisan(id) {
-                window.location.href = `/admin/artisan/${id}`;
-            }
-
-            function deleteArtisan(id) {
-                if (confirm('هل أنت متأكد من حذف هذا الحرفي؟')) {
-                    fetch(`/admin/artisan/${id}`, {
-                        method: 'DELETE'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            $('#artisanTable').DataTable().ajax.reload();
+            // Initialize DataTable
+            var table = $('#artisanTable').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: '/admin/artisans/data',
+                    dataSrc: 'data'
+                },
+                columns: [
+                    { 
+                        data: 'id',
+                        render: function(data, type, row) {
+                            return `<span class="font-medium">${data}</span>`;
                         }
-                    })
-                    .catch(error => console.error('Error:', error));
-                }
-            }
-
-            // Reviews modal functions
-            function showReviews(reviews, artisanName) {
-                const reviewsList = document.getElementById('reviewsList');
-                reviewsList.innerHTML = '';
-                
-                if (reviews && reviews.length > 0) {
-                    reviews.forEach(review => {
-                        const date = new Date(review.created_at).toLocaleDateString('ar-TN');
-                        const stars = getStarsHtml(review.rating);
-                        
-                        reviewsList.innerHTML += `
-                            <div class="border-b border-slate-200 pb-4">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <div class="font-medium text-slate-800">${review.user_name}</div>
-                                        <div class="text-sm text-slate-500">${date}</div>
-                                    </div>
-                                    <div class="flex gap-1 text-yellow-500">
-                                        ${stars}
-                                    </div>
+                    },
+                    { 
+                        data: 'nom',
+                        render: function(data) {
+                            return `<span class="font-medium text-slate-900">${data || ''}</span>`;
+                        }
+                    },
+                    { data: 'email' },
+                    { 
+                        data: 'telephone',
+                        render: function(data) {
+                            return data || 'غير متوفر';
+                        }
+                    },
+                    { data: 'gouvernorat' },
+                    {
+                        data: null,
+                        render: function(data, type, row) {
+                            return `
+                                <div class="flex justify-end gap-3">
+                                    <button onclick="deleteUser(${row.id}, '${row.nom.replace(/'/g, "\\'")}')" 
+                                        class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </div>
-                                <p class="text-slate-600">${review.review_text || 'لا يوجد تعليق'}</p>
-                            </div>
-                        `;
-                    });
-                } else {
-                    reviewsList.innerHTML = '<p class="text-center text-slate-500">لا توجد تقييمات بعد</p>';
+                            `;
+                        }
+                    }
+                ],
+                order: [[0, 'desc']],
+                language: {
+                    "sProcessing": "جارٍ التحميل...",
+                    "sLengthMenu": "أظهر _MENU_ مدخلات",
+                    "sZeroRecords": "لم يعثر على أية سجلات",
+                    "sInfo": "إظهار _START_ إلى _END_ من أصل _TOTAL_ مدخل",
+                    "sInfoEmpty": "يعرض 0 إلى 0 من أصل 0 سجل",
+                    "sInfoFiltered": "(منتقاة من مجموع _MAX_ مُدخل)",
+                    "sInfoPostFix": "",
+                    "sSearch": "ابحث:",
+                    "sUrl": "",
+                    "oPaginate": {
+                        "sFirst": "الأول",
+                        "sPrevious": "السابق",
+                        "sNext": "التالي",
+                        "sLast": "الأخير"
+                    }
                 }
-                
-                document.getElementById('reviewsModal').classList.remove('hidden');
-            }
-
-            function getStarsHtml(rating) {
-                const fullStars = Math.floor(rating);
-                const hasHalfStar = rating % 1 >= 0.5;
-                let stars = '';
-                
-                // Add full stars
-                for (let i = 0; i < fullStars; i++) {
-                    stars += '<i class="fas fa-star"></i>';
-                }
-                
-                // Add half star if needed
-                if (hasHalfStar) {
-                    stars += '<i class="fas fa-star-half-alt"></i>';
-                }
-                
-                // Add empty stars
-                const emptyStars = 5 - Math.ceil(rating);
-                for (let i = 0; i < emptyStars; i++) {
-                    stars += '<i class="far fa-star"></i>';
-                }
-                
-                return stars;
-            }
-
-            // Close reviews modal
-            document.getElementById('closeReviewsModal').addEventListener('click', function() {
-                document.getElementById('reviewsModal').classList.add('hidden');
             });
         });
     </script>

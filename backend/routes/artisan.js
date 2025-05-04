@@ -572,42 +572,46 @@ router.get('/stats', checkArtisanAuth, async (req, res) => {
     }
 });
 
-// Get recent activities (bookings)
+// Get recent activities
 router.get('/recent-activities', checkArtisanAuth, async (req, res) => {
     try {
         // First get artisan_id
         const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
-        
         const [artisanResult] = await db.promise().query(getArtisanQuery, [req.session.userId]);
         
         if (artisanResult.length === 0) {
             return res.status(404).json({ error: 'Artisan not found' });
         }
-
+        
         const artisanId = artisanResult[0].id;
-        const status = req.query.status;
+        const status = req.query.status || 'all';
 
-        // Build the activities query with optional status filter
-        const activitiesQuery = `
+        let statusCondition = '';
+        if (status !== 'all') {
+            statusCondition = `AND b.status = '${status}'`;
+        }
+
+        const query = `
             SELECT 
                 b.id,
-                DATE_FORMAT(b.booking_date, '%Y-%m-%d') as booking_date,
-                TIME_FORMAT(b.booking_time, '%H:%i') as booking_time,
+                b.booking_date,
+                b.booking_time,
                 b.status,
-                DATE_FORMAT(b.created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+                b.created_at,
+                b.client_number,
                 u.nom as user_name,
+                u.telephone as user_phone,
                 u.photo_profile as user_photo,
-                'booking' as type
+                b.notes
             FROM bookings b
             JOIN utilisateurs u ON b.user_id = u.id
-            WHERE b.artisan_id = ?
-            ${status && status !== 'all' ? 'AND b.status = ?' : ''}
+            WHERE b.artisan_id = ? 
+            ${statusCondition}
             ORDER BY b.created_at DESC
         `;
-
-        const queryParams = status && status !== 'all' ? [artisanId, status] : [artisanId];
-        const [activities] = await db.promise().query(activitiesQuery, queryParams);
-
+        
+        const [activities] = await db.promise().query(query, [artisanId]);
+        
         res.json(activities.map(activity => {
             if (activity.user_photo) {
                 activity.user_photo = `data:image/jpeg;base64,${activity.user_photo.toString('base64')}`;
@@ -615,7 +619,7 @@ router.get('/recent-activities', checkArtisanAuth, async (req, res) => {
             return activity;
         }));
     } catch (error) {
-        console.error('Error fetching recent activities:', error);
+        console.error('Error fetching activities:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

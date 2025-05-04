@@ -5,11 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>إنشاء حساب جديد</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Ajouter la police Poppins depuis Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         /* Appliquer la police Poppins à tout le document */
         body {
@@ -169,15 +173,82 @@
             </div>
             <div>
                 <label class="block text-white/80 font-medium mb-1">البريد الإلكتروني</label>
-                <input type="email" name="email"
+                <input type="email" name="email" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
+                    required>
+                <p class="text-yellow-300 text-sm mt-1 hidden" id="emailError">يجب أن يحتوي البريد الإلكتروني على @</p>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">رقم الهاتف</label>
+                <input type="tel" name="telephone" pattern="[0-9]{8}"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
+                    placeholder="مثال: 12345678" required>
+                <p class="text-yellow-300 text-sm mt-1 hidden" id="phoneError">يجب أن يتكون رقم الهاتف من 8 أرقام</p>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">العنوان</label>
+                <input type="text" name="adresse"
                     class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
                     required>
             </div>
             <div>
-                <label class="block text-white/80 font-medium mb-1">كلمة المرور</label>
-                <input type="password" name="password"
+                <label class="block text-white/80 font-medium mb-1">الولاية</label>
+                <select name="gouvernorat"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field"
+                    required>
+                    <option value="">اختر الولاية</option>
+                    <option value="Tunis">تونس</option>
+                    <option value="Ariana">أريانة</option>
+                    <option value="Ben Arous">بن عروس</option>
+                    <option value="Manouba">منوبة</option>
+                    <option value="Nabeul">نابل</option>
+                    <option value="Zaghouan">زغوان</option>
+                    <option value="Bizerte">بنزرت</option>
+                    <option value="Beja">باجة</option>
+                    <option value="Jendouba">جندوبة</option>
+                    <option value="Kef">الكاف</option>
+                    <option value="Siliana">سليانة</option>
+                    <option value="Sousse">سوسة</option>
+                    <option value="Monastir">المنستير</option>
+                    <option value="Mahdia">المهدية</option>
+                    <option value="Sfax">صفاقس</option>
+                    <option value="Kairouan">القيروان</option>
+                    <option value="Kasserine">القصرين</option>
+                    <option value="Sidi Bouzid">سيدي بوزيد</option>
+                    <option value="Gabes">قابس</option>
+                    <option value="Medenine">مدنين</option>
+                    <option value="Tataouine">تطاوين</option>
+                    <option value="Gafsa">قفصة</option>
+                    <option value="Tozeur">توزر</option>
+                    <option value="Kebili">قبلي</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">المدينة</label>
+                <input type="text" name="ville"
                     class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
                     required>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">الرمز البريدي</label>
+                <input type="text" name="code_postal" pattern="[0-9]{4}"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
+                    placeholder="مثال: 1000" required>
+                <p class="text-yellow-300 text-sm mt-1 hidden" id="postalError">يجب أن يتكون الرمز البريدي من 4 أرقام</p>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">تاريخ الميلاد</label>
+                <input type="text" name="date_naissance" id="date_naissance" placeholder="اختر تاريخ ميلادك"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
+                    required readonly>
+                <p class="text-yellow-300 text-sm mt-1 hidden" id="ageError">يجب أن يكون عمرك 18 سنة على الأقل</p>
+            </div>
+            <div>
+                <label class="block text-white/80 font-medium mb-1">كلمة المرور</label>
+                <input type="password" name="password" minlength="8"
+                    class="w-full p-3 border border-white/30 bg-white/10 text-white rounded-lg focus:outline-none input-field placeholder-white/60"
+                    required>
+                <p class="text-yellow-300 text-sm mt-1 hidden" id="passwordError">يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل</p>
             </div>
             <div>
                 <label class="block text-white/80 font-medium mb-1">الوظيفة</label>
@@ -199,11 +270,86 @@
     </div>
 
     <script>
+        // Initialize Flatpickr with Arabic locale
+        flatpickr("#date_naissance", {
+            locale: "ar",
+            dateFormat: "Y-m-d",
+            minDate: "1900-01-01",
+            disableMobile: false,
+            theme: "material_blue",
+            position: "auto",
+            animate: true,
+            showMonths: 1,
+            onChange: function(selectedDates, dateStr, instance) {
+                const age = calculateAge(dateStr);
+                if (age < 18) {
+                    document.getElementById("ageError").classList.remove("hidden");
+                } else {
+                    document.getElementById("ageError").classList.add("hidden");
+                }
+            }
+        });
+
+        // Calculate age from date of birth
+        function calculateAge(birthDate) {
+            const today = new Date();
+            const birth = new Date(birthDate);
+            let age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
         document.getElementById("signupForm").addEventListener("submit", async function (event) {
             event.preventDefault();
 
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
+
+            // Validate email
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(data.email)) {
+                document.getElementById("emailError").classList.remove("hidden");
+                return;
+            } else {
+                document.getElementById("emailError").classList.add("hidden");
+            }
+
+            // Validate age
+            const age = calculateAge(data.date_naissance);
+            if (age < 18) {
+                document.getElementById("ageError").classList.remove("hidden");
+                return;
+            } else {
+                document.getElementById("ageError").classList.add("hidden");
+            }
+
+            // Validate password
+            if (data.password.length < 8) {
+                document.getElementById("passwordError").classList.remove("hidden");
+                return;
+            } else {
+                document.getElementById("passwordError").classList.add("hidden");
+            }
+
+            // Validate phone number
+            if (data.telephone.length !== 8) {
+                document.getElementById("phoneError").classList.remove("hidden");
+                return;
+            } else {
+                document.getElementById("phoneError").classList.add("hidden");
+            }
+
+            // Validate postal code
+            if (data.code_postal.length !== 4) {
+                document.getElementById("postalError").classList.remove("hidden");
+                return;
+            } else {
+                document.getElementById("postalError").classList.add("hidden");
+            }
 
             try {
                 const response = await fetch("/signup", {
@@ -237,6 +383,40 @@
                     title: "خطأ في الاتصال",
                     text: "يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى."
                 });
+            }
+        });
+
+        // Add input event listeners for real-time validation
+        document.querySelector('input[name="email"]').addEventListener('input', function() {
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(this.value)) {
+                document.getElementById("emailError").classList.remove("hidden");
+            } else {
+                document.getElementById("emailError").classList.add("hidden");
+            }
+        });
+
+        document.querySelector('input[name="password"]').addEventListener('input', function() {
+            if (this.value.length < 8) {
+                document.getElementById("passwordError").classList.remove("hidden");
+            } else {
+                document.getElementById("passwordError").classList.add("hidden");
+            }
+        });
+
+        document.querySelector('input[name="telephone"]').addEventListener('input', function() {
+            if (this.value.length !== 8) {
+                document.getElementById("phoneError").classList.remove("hidden");
+            } else {
+                document.getElementById("phoneError").classList.add("hidden");
+            }
+        });
+
+        document.querySelector('input[name="code_postal"]').addEventListener('input', function() {
+            if (this.value.length !== 4) {
+                document.getElementById("postalError").classList.remove("hidden");
+            } else {
+                document.getElementById("postalError").classList.add("hidden");
             }
         });
     </script>

@@ -367,7 +367,16 @@ router.get('/users-data', checkAdminAuth, (req, res) => {
                 u.email, 
                 u.gouvernorat,
                 u.telephone,
-                COALESCE(AVG(r.rating), 0) as rating
+                COALESCE(
+                    (
+                        SELECT AVG(r.rating)
+                        FROM reviews r
+                        JOIN artisans a ON r.artisan_id = a.id
+                        JOIN utilisateurs u2 ON a.utilisateur_id = u2.id
+                        WHERE u2.rôle = 'artisan'
+                    ),
+                    0
+                ) as rating
             FROM utilisateurs u
             LEFT JOIN reviews r ON u.id = r.artisan_id
             WHERE u.rôle = 'artisan'
@@ -797,7 +806,7 @@ router.get('/client-list/data', checkAdminAuth, async (req, res) => {
         `;
 
         const [clients] = await db.promise().query(query);
-        
+
         // Format dates and add age
         clients.forEach(client => {
             if (client.date_inscription) {
@@ -820,6 +829,180 @@ router.get('/client-list/data', checkAdminAuth, async (req, res) => {
     } catch (error) {
         console.error('Error fetching clients:', error);
         res.status(500).json({ error: 'Error fetching clients' });
+    }
+});
+
+// Get clients data for DataTable
+router.get('/client-list/data', checkAdminAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id,
+                u.nom,
+                u.email,
+                u.telephone,
+                u.adresse,
+                u.gouvernorat,
+                u.date_inscription,
+                u.active,
+                u.sexe,
+                u.date_naissance,
+                0 as total_requests
+            FROM utilisateurs u
+            WHERE u.rôle = 'client'
+            ORDER BY u.date_inscription DESC
+        `;
+
+        const [clients] = await db.promise().query(query);
+
+        res.json({
+            draw: parseInt(req.query.draw || '1'),
+            recordsTotal: clients.length,
+            recordsFiltered: clients.length,
+            data: clients.map(client => ({
+                ...client,
+                date_inscription: client.date_inscription ? new Date(client.date_inscription).toLocaleDateString('ar-TN') : '',
+                date_naissance: client.date_naissance ? new Date(client.date_naissance).toLocaleDateString('ar-TN') : '',
+                age: client.date_naissance ? Math.floor((new Date() - new Date(client.date_naissance)) / (365.25 * 24 * 60 * 60 * 1000)) : null
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching clients:', error);
+        res.status(500).json({ error: 'Error fetching clients data' });
+    }
+});
+
+// Get artisans data for DataTable
+router.get('/artisans/data', checkAdminAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id,
+                u.nom,
+                u.email,
+                u.telephone,
+                u.adresse,
+                u.gouvernorat,
+                u.active,
+                a.spécialité,
+                (SELECT AVG(rating) FROM reviews r WHERE r.artisan_id = a.id) as avg_rating,
+                (SELECT COUNT(*) FROM reviews r WHERE r.artisan_id = a.id) as review_count
+            FROM utilisateurs u
+            LEFT JOIN artisans a ON u.id = a.utilisateur_id
+            WHERE u.rôle = 'artisan'
+            ORDER BY u.id DESC
+        `;
+
+        const [artisans] = await db.promise().query(query);
+
+        res.json({
+            draw: parseInt(req.query.draw || '1'),
+            recordsTotal: artisans.length,
+            recordsFiltered: artisans.length,
+            data: artisans.map(artisan => ({
+                ...artisan,
+                avg_rating: artisan.avg_rating ? parseFloat(artisan.avg_rating).toFixed(1) : '0.0',
+                review_count: artisan.review_count || 0
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching artisans:', error);
+        res.status(500).json({ error: 'Error fetching artisans data' });
+    }
+});
+
+// Delete user
+router.delete('/user/:id', checkAdminAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
+    
+    try {
+        await connection.beginTransaction();
+        
+        const userId = req.params.id;
+        
+        // First check if user exists
+        const [user] = await connection.query(
+            'SELECT * FROM utilisateurs WHERE id = ?',
+            [userId]
+        );
+
+        if (user.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                error: 'المستخدم غير موجود' 
+            });
+        }
+
+        // Don't allow deletion of admin users
+        if (user[0].rôle === 'admin') {
+            await connection.rollback();
+            return res.status(403).json({ 
+                success: false, 
+                error: 'لا يمكن حذف حساب المسؤول' 
+            });
+        }
+
+        // Delete related records based on user role
+        if (user[0].rôle === 'artisan') {
+            // Get artisan ID first
+            const [artisan] = await connection.query(
+                'SELECT id FROM artisans WHERE utilisateur_id = ?',
+                [userId]
+            );
+            
+            if (artisan.length > 0) {
+                const artisanId = artisan[0].id;
+                
+                // Delete reviews if table exists
+                try {
+                    await connection.query('DELETE FROM reviews WHERE artisan_id = ?', [artisanId]);
+                } catch (error) {
+                    if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+                }
+                
+                // Delete requests if table exists
+                try {
+                    await connection.query('DELETE FROM demandes WHERE artisan_id = ?', [artisanId]);
+                } catch (error) {
+                    if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+                }
+                
+                // Delete artisan record
+                await connection.query('DELETE FROM artisans WHERE id = ?', [artisanId]);
+            }
+        } else if (user[0].rôle === 'client') {
+            // Delete client-related records if tables exist
+            try {
+                await connection.query('DELETE FROM demandes WHERE client_id = ?', [userId]);
+            } catch (error) {
+                if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+            }
+            
+            try {
+                await connection.query('DELETE FROM reviews WHERE user_id = ?', [userId]);
+            } catch (error) {
+                if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+            }
+        }
+        
+        // Finally delete the user
+        await connection.query('DELETE FROM utilisateurs WHERE id = ?', [userId]);
+        
+        // Commit transaction
+        await connection.commit();
+        
+        res.json({ success: true });
+    } catch (error) {
+        // Rollback on error
+        await connection.rollback();
+        console.error('Error deleting user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء حذف المستخدم' 
+        });
+    } finally {
+        connection.release();
     }
 });
 

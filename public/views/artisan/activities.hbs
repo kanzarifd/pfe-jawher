@@ -51,6 +51,7 @@
                         <thead>
                             <tr class="bg-gray-50 border-b border-gray-100">
                                 <th class="px-6 py-4 text-right text-sm font-medium text-slate-600">العميل</th>
+                                <th class="px-6 py-4 text-right text-sm font-medium text-slate-600">رقم العميل</th>
                                 <th class="px-6 py-4 text-right text-sm font-medium text-slate-600">تاريخ الحجز</th>
                                 <th class="px-6 py-4 text-right text-sm font-medium text-slate-600">وقت الحجز</th>
                                 <th class="px-6 py-4 text-right text-sm font-medium text-slate-600">الحالة</th>
@@ -244,6 +245,7 @@
                                 <span class="font-medium text-slate-700">${activity.user_name}</span>
                             </div>
                         </td>
+                        <td class="px-6 py-4 text-slate-600">${activity.client_number || activity.user_phone || 'غير متوفر'}</td>
                         <td class="px-6 py-4 text-slate-600">${activity.booking_date}</td>
                         <td class="px-6 py-4 text-slate-600">${activity.booking_time}</td>
                         <td class="px-6 py-4">
