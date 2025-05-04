@@ -42,10 +42,10 @@
             <div class="bg-white rounded-lg shadow-sm p-6">
                 <div class="flex items-center">
                     <div class="p-3 bg-green-50 rounded-full">
-                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                        <i class="fas fa-user-plus text-green-500 text-xl"></i>
                     </div>
                     <div class="mr-4">
-                        <h3 class="text-slate-500 text-sm">الحرفيين النشطين</h3>
+                        <h3 class="text-slate-500 text-sm">الحرفيين جدد</h3>
                         <p class="text-2xl font-bold text-slate-800">{{activeArtisans}}</p>
                     </div>
                 </div>
@@ -96,6 +96,21 @@
           </div>
         </div>
 
+        <!-- Reviews Modal -->
+        <div id="reviewsModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold">التقييمات</h3>
+                    <button id="closeReviewsModal" class="text-slate-500 hover:text-slate-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="reviewsList" class="space-y-4">
+                    <!-- Reviews will be inserted here -->
+                </div>
+            </div>
+        </div>
+
         <!-- Table Section -->
         <div class="bg-white rounded-lg shadow-sm">
             <div class="p-6">
@@ -117,8 +132,8 @@
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الرقم</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الاسم</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">البريد الإلكتروني</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">التخصص</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">التقييم</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">رقم الهاتف</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">العنوان</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الإجراءات</th>
                             </tr>
                         </thead>
@@ -168,19 +183,8 @@
                     var table = $('#artisanTable').DataTable({
                         language: lang,
                         ajax: {
-                            url: "/admin/users-data",
-                            data: function(d) {
-                                d.role = 'artisan';  // Add role parameter
-                            },
-                            dataSrc: function(json) {
-                                return json.map(function(item) {
-                                    return {
-                                        ...item,
-                                        rating: parseFloat(item.rating || 0).toFixed(1),
-                                        specialite: item.specialite || 'غير محدد'
-                                    };
-                                });
-                            }
+                            url: '/admin/artisan-list/data',
+                            dataSrc: ''
                         },
                         columns: [
                             { 
@@ -202,21 +206,15 @@
                                 }
                             },
                             { 
-                                data: "specialite",
+                                data: "telephone",
                                 render: function(data, type, row) {
-                                    return `<div class="text-slate-600">${data || 'غير محدد'}</div>`;
+                                    return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
                                 }
                             },
                             { 
-                                data: "rating",
+                                data: "adresse",
                                 render: function(data, type, row) {
-                                    const rating = parseFloat(data || 0);
-                                    const fullStars = Math.floor(rating);
-                                    const hasHalfStar = rating % 1 >= 0.5;
-                                    let stars = '★'.repeat(fullStars);
-                                    if (hasHalfStar) stars += '½';
-                                    stars += '☆'.repeat(5 - Math.ceil(rating));
-                                    return `<div class="text-yellow-500">${stars} (${rating})</div>`;
+                                    return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
                                 }
                             },
                             {
@@ -262,6 +260,67 @@
                     .catch(error => console.error('Error:', error));
                 }
             }
+
+            // Reviews modal functions
+            function showReviews(reviews, artisanName) {
+                const reviewsList = document.getElementById('reviewsList');
+                reviewsList.innerHTML = '';
+                
+                if (reviews && reviews.length > 0) {
+                    reviews.forEach(review => {
+                        const date = new Date(review.created_at).toLocaleDateString('ar-TN');
+                        const stars = getStarsHtml(review.rating);
+                        
+                        reviewsList.innerHTML += `
+                            <div class="border-b border-slate-200 pb-4">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <div class="font-medium text-slate-800">${review.user_name}</div>
+                                        <div class="text-sm text-slate-500">${date}</div>
+                                    </div>
+                                    <div class="flex gap-1 text-yellow-500">
+                                        ${stars}
+                                    </div>
+                                </div>
+                                <p class="text-slate-600">${review.review_text || 'لا يوجد تعليق'}</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    reviewsList.innerHTML = '<p class="text-center text-slate-500">لا توجد تقييمات بعد</p>';
+                }
+                
+                document.getElementById('reviewsModal').classList.remove('hidden');
+            }
+
+            function getStarsHtml(rating) {
+                const fullStars = Math.floor(rating);
+                const hasHalfStar = rating % 1 >= 0.5;
+                let stars = '';
+                
+                // Add full stars
+                for (let i = 0; i < fullStars; i++) {
+                    stars += '<i class="fas fa-star"></i>';
+                }
+                
+                // Add half star if needed
+                if (hasHalfStar) {
+                    stars += '<i class="fas fa-star-half-alt"></i>';
+                }
+                
+                // Add empty stars
+                const emptyStars = 5 - Math.ceil(rating);
+                for (let i = 0; i < emptyStars; i++) {
+                    stars += '<i class="far fa-star"></i>';
+                }
+                
+                return stars;
+            }
+
+            // Close reviews modal
+            document.getElementById('closeReviewsModal').addEventListener('click', function() {
+                document.getElementById('reviewsModal').classList.add('hidden');
+            });
         });
     </script>
 </body>

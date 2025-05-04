@@ -93,10 +93,17 @@
                     <table id="clientTable" class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">الرقم</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">الاسم</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">البريد الإلكتروني</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">الإجراءات</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الرقم</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الاسم</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">البريد الإلكتروني</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">رقم الهاتف</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">العنوان</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">المحافظة</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الجنس</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">العمر</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">تاريخ التسجيل</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">عدد الطلبات</th>
+                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الإجراءات</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -186,42 +193,100 @@
 
             var table = $('#clientTable').DataTable({
                 language: {
-                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
+                    "sProcessing": "جارٍ التحميل...",
+                    "sLengthMenu": "أظهر _MENU_ مدخلات",
+                    "sZeroRecords": "لم يعثر على أية سجلات",
+                    "sInfo": "إظهار _START_ إلى _END_ من أصل _TOTAL_ مدخل",
+                    "sInfoEmpty": "يعرض 0 إلى 0 من أصل 0 سجل",
+                    "sInfoFiltered": "(منتقاة من مجموع _MAX_ مُدخل)",
+                    "sInfoPostFix": "",
+                    "sSearch": "ابحث:",
+                    "sUrl": "",
+                    "oPaginate": {
+                        "sFirst": "الأول",
+                        "sPrevious": "السابق",
+                        "sNext": "التالي",
+                        "sLast": "الأخير"
+                    }
                 },
                 ajax: {
-                    url: "/admin/users-data",
-                    data: function(d) {
-            d.role = 'client';
-            
-        },
-        dataSrc: function(json) {
-                        return json.map(function(item) {
-                            return {
-                                ...item,
-                                rating: parseFloat(item.rating || 0).toFixed(1),
-                                specialite: item.specialite || 'غير محدد'
-                            };
-                        });
-                    }
+                    url: "/admin/client-list/data",
+                    dataSrc: ''
                 },
                 columns: [
                     { 
                         data: null,
                         render: function(data, type, row, meta) {
-                            return meta.row + 1;
+                            return `<span class="font-semibold text-slate-600">${meta.row + 1}</span>`;
                         }
                     },
-                    { data: "nom" },
-                    { data: "email" },
+                    { 
+                        data: "nom",
+                        render: function(data, type, row) {
+                            return `<div class="font-medium text-slate-800">${data || ''}</div>`;
+                        }
+                    },
+                    { 
+                        data: "email",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || ''}</div>`;
+                        }
+                    },
+                    { 
+                        data: "telephone",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
+                        }
+                    },
+                    { 
+                        data: "adresse",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
+                        }
+                    },
+                    { 
+                        data: "gouvernorat",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
+                        }
+                    },
+                    { 
+                        data: "sexe",
+                        render: function(data, type, row) {
+                            const gender = data === 'M' ? 'ذكر' : data === 'F' ? 'أنثى' : 'غير محدد';
+                            const color = data === 'M' ? 'blue' : data === 'F' ? 'pink' : 'gray';
+                            return `<div class="text-${color}-600">${gender}</div>`;
+                        }
+                    },
+                    { 
+                        data: "age",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || 'غير متوفر'} سنة</div>`;
+                        }
+                    },
+                    { 
+                        data: "date_inscription",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
+                        }
+                    },
+                    { 
+                        data: "total_requests",
+                        render: function(data, type, row) {
+                            return `<div class="text-slate-600">${data || '0'} طلب</div>`;
+                        }
+                    },
                     {
                         data: null,
                         render: function(data, type, row) {
                             return `
                                 <div class="flex justify-end gap-3">
-                                    <button onclick="viewUser('${row.id}')" class="text-blue-600 hover:text-blue-900">
+                                    <button onclick="viewClient('${row.id}')" 
+                                        class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-md transition-colors duration-200">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button onclick="deleteUser('${row.id}')" class="text-red-600 hover:text-red-900">
+                                    <button onclick="deleteClient('${row.id}')" 
+                                        class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -229,8 +294,7 @@
                         }
                     }
                 ],
-                responsive: true,
-                order: [[0, 'asc']],
+                order: [[8, 'desc']], // Sort by registration date by default
                 pageLength: 10
             });
 
@@ -345,6 +409,78 @@
                       }
                     });
                 }
+            }
+
+            // View client details
+            function viewClient(clientId) {
+                window.location.href = `/admin/client/${clientId}`;
+            }
+
+            // Delete client
+            function deleteClient(clientId) {
+                if (confirm('هل أنت متأكد من حذف هذا العميل؟')) {
+                    fetch(`/admin/client/${clientId}`, {
+                        method: 'DELETE',
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Refresh the DataTable
+                            $('#clientTable').DataTable().ajax.reload();
+                            // Show success message
+                            alert('تم حذف العميل بنجاح');
+                        } else {
+                            alert(data.error || 'حدث خطأ أثناء حذف العميل');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('حدث خطأ أثناء حذف العميل');
+                    });
+                }
+            }
+
+            // Add client
+            function addClient() {
+                // Get form data
+                const formData = {
+                    nom: $('#nom').val(),
+                    email: $('#email').val(),
+                    telephone: $('#telephone').val(),
+                    adresse: $('#adresse').val(),
+                    gouvernorat: $('#gouvernorat').val(),
+                    sexe: $('#sexe').val(),
+                    date_naissance: $('#date_naissance').val(),
+                    password: $('#password').val()
+                };
+
+                // Send POST request
+                fetch('/admin/client', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Close modal
+                        $('#addClientModal').modal('hide');
+                        // Refresh table
+                        $('#clientTable').DataTable().ajax.reload();
+                        // Show success message
+                        alert('تم إضافة العميل بنجاح');
+                        // Reset form
+                        $('#addClientForm')[0].reset();
+                    } else {
+                        alert(data.error || 'حدث خطأ أثناء إضافة العميل');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('حدث خطأ أثناء إضافة العميل');
+                });
             }
 
             // Notification function
