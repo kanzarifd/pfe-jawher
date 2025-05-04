@@ -72,6 +72,10 @@
                         <i class="fas fa-tools text-slate-400"></i>
                         <h3 class="text-lg font-semibold text-slate-800">جميع الحرفيين</h3>
                     </div>
+                    <button onclick="openAddArtisanModal()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200">
+                        <i class="fas fa-plus"></i>
+                        <span>إضافة حرفي جديد</span>
+                    </button>
                 </div>
 
                 <div class="overflow-x-auto bg-white rounded-lg">
@@ -91,6 +95,91 @@
             </div>
         </div>
     </main>
+
+    <!-- Add Artisan Modal -->
+    <div id="addArtisanModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-slate-800">إضافة حرفي جديد</h3>
+                <button onclick="closeAddArtisanModal()" class="text-slate-500 hover:text-slate-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="addArtisanForm" class="space-y-6">
+                <!-- Basic Information -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">الاسم</label>
+                        <input type="text" name="nom" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">البريد الإلكتروني</label>
+                        <input type="email" name="email" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">رقم الهاتف</label>
+                        <input type="tel" name="telephone" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">المحافظة</label>
+                        <input type="text" name="gouvernorat" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <!-- Artisan Specific Information -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">التخصص</label>
+                        <input type="text" name="spécialité" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">الموقع</label>
+                        <input type="text" name="localisation" required class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">سنوات الخبرة</label>
+                        <input type="number" name="expérience" required min="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">التعريفة بالساعة (د.ت)</label>
+                        <input type="number" name="tarif_horaire" required min="0" step="0.001" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <!-- Social Media Links -->
+                <div class="grid grid-cols-1 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">فيسبوك (اختياري)</label>
+                        <input type="url" name="facebook" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">انستغرام (اختياري)</label>
+                        <input type="url" name="instagram" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">لينكد إن (اختياري)</label>
+                        <input type="url" name="linkedin" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">وصف (اختياري)</label>
+                    <textarea name="description" rows="4" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-4">
+                    <button type="button" onclick="closeAddArtisanModal()" class="px-6 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">
+                        إلغاء
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
+                        إضافة الحرفي
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
@@ -195,7 +284,51 @@
                     }
                 }
             });
+            
+            // Handle form submission
+            $('#addArtisanForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = {};
+                $(this).serializeArray().forEach(item => {
+                    formData[item.name] = item.value;
+                });
+
+                fetch('/admin/artisans', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        closeAddArtisanModal();
+                        $('#artisanTable').DataTable().ajax.reload();
+                        showNotification('تم إضافة الحرفي بنجاح');
+                        $('#addArtisanForm')[0].reset();
+                    } else {
+                        showNotification(data.error || 'حدث خطأ أثناء إضافة الحرفي', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('حدث خطأ أثناء إضافة الحرفي', 'error');
+                });
+            });
         });
+
+        // Modal functions
+        function openAddArtisanModal() {
+            document.getElementById('addArtisanModal').classList.remove('hidden');
+            document.getElementById('addArtisanModal').classList.add('flex');
+        }
+
+        function closeAddArtisanModal() {
+            document.getElementById('addArtisanModal').classList.remove('flex');
+            document.getElementById('addArtisanModal').classList.add('hidden');
+        }
     </script>
 </body>
 </html>

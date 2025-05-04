@@ -520,10 +520,18 @@
                     <!-- Profile Header -->
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center space-x-4">
-<img id="artisanPhoto" class="w-20 h-20 rounded-full object-cover" 
-             src="/img/avatar-default.png" alt="صورة الحرفي"
-             onerror="this.src='/img/avatar-default.png'">
-
+                            <div id="artisanPhotoContainer">
+                                {{#if photo_profile}}
+                                <img id="artisanPhoto" class="w-20 h-20 rounded-full object-cover" 
+                                     src="data:image/jpeg;base64,{{photo_profile}}" 
+                                     alt="صورة الحرفي"
+                                     onerror="this.onerror=null; this.src='/img/avatar-default.png';">
+                                {{else}}
+                                <div class="w-20 h-20 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+                                    {{substring nom 0 1}}
+                                </div>
+                                {{/if}}
+                            </div>
                             <div>
                                 <h2 id="artisanName" class="text-2xl font-bold text-gray-800">أحمد بن علي</h2>
                                 <p id="artisanSpecialty" class="text-gray-600">كهربائي محترف</p>
@@ -720,7 +728,7 @@
       async function showArtisanProfile(artisanId) {
     try {
       const [artisanResponse, galleryResponse] = await Promise.all([
-            fetch(`/get-artisan/${artisanId}`),
+            fetch(`/artisan/get-artisan/${artisanId}`),
             fetch(`/client/get-gallery/${artisanId}`)  // Updated path
         ]);
         
@@ -729,13 +737,21 @@
       console.log(gallery);
         // Update modal content with real data
         const modal = document.getElementById('artisanModal');
-        const profileImage = modal.querySelector('#artisanPhoto');
-       profileImage.src = artisan.photo_profile ? 
-            `data:image/jpeg;base64,${artisan.photo_profile}` : 
-            '/img/avatar-default.png';
-             profileImage.onerror = function() {
-            this.src = '/img/avatar-default.png';
-        };
+        const photoContainer = document.getElementById('artisanPhotoContainer');
+        if (artisan.photo_profile) {
+            photoContainer.innerHTML = `
+                <img id="artisanPhoto" class="w-20 h-20 rounded-full object-cover" 
+                     src="data:image/jpeg;base64,${artisan.photo_profile}" 
+                     alt="صورة الحرفي"
+                     onerror="this.onerror=null; this.src='/img/avatar-default.png';">
+            `;
+        } else {
+            photoContainer.innerHTML = `
+                <div class="w-20 h-20 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+                    ${artisan.nom.charAt(0)}
+                </div>
+            `;
+        }
         modal.querySelector('#artisanName').textContent = artisan.nom;
         modal.querySelector('#artisanSpecialty').textContent = artisan.spécialité;
         
@@ -762,7 +778,7 @@
                     <i class="fas fa-map-marker-alt w-6"></i>
                     <span id="artisanLocation">${artisan.localisation || 'غير متوفر'}</span>
                 </p>
-                <div class="flex items-center gap-6 mt-4 rtl:space-x-reverse">
+                <div class="flex items-center gap-6 mt-4">
                     ${artisan.facebook ? `
                         <a href="${artisan.facebook}" target="_blank" class="text-blue-600 hover:text-blue-800">
                             <i class="fab fa-facebook-f text-2xl"></i>

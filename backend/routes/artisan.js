@@ -96,7 +96,7 @@ router.get('/get-artisans', async (req, res) => {
 router.get('/get-artisan/:id', async (req, res) => {
     try {
         const query = `
-            SELECT a.*, u.nom, u.email, u.photo_profile,
+            SELECT a.*, u.nom, u.email, u.photo_profile, u.telephone, u.gouvernorat, u.ville,
             COALESCE((SELECT AVG(rating) FROM reviews WHERE artisan_id = a.id), 0) as rating,
             COALESCE((SELECT COUNT(*) FROM reviews WHERE artisan_id = a.id), 0) as review_count
             FROM artisans a 
@@ -105,14 +105,20 @@ router.get('/get-artisan/:id', async (req, res) => {
         `;
         
         const [results] = await db.promise().query(query, [req.params.id]);
-        if (results.length === 0) {
+        
+        if (!results || results.length === 0) {
             return res.status(404).json({ error: 'Artisan not found' });
         }
 
         // Convert Buffer to base64 string if photo exists
         const artisan = results[0];
         if (artisan.photo_profile) {
-            artisan.photo_profile = `data:image/jpeg;base64,${artisan.photo_profile.toString('base64')}`;
+            try {
+                artisan.photo_profile = Buffer.from(artisan.photo_profile).toString('base64');
+            } catch (error) {
+                console.error('Error converting photo to base64:', error);
+                artisan.photo_profile = null;
+            }
         }
 
         res.json(artisan);

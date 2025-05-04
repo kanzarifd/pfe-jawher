@@ -42,6 +42,11 @@ hbs.registerHelper('json', function (context) {
     return JSON.stringify(context);
 });
 
+hbs.registerHelper('substring', function (str, start, length) {
+    if (typeof str !== 'string') return '';
+    return str.substring(start, start + length);
+});
+
 hbs.registerHelper('eq', function (a, b) {
     return a === b;
 });

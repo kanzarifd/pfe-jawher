@@ -726,6 +726,79 @@ router.post('/create-user', checkAdminAuth, (req, res) => {
     });
 });
 
+// Create a new artisan
+router.post('/artisans', checkAdminAuth, async (req, res) => {
+    try {
+        const {
+            nom,
+            email,
+            telephone,
+            gouvernorat,
+            spécialité,
+            localisation,
+            expérience,
+            tarif_horaire,
+            facebook,
+            instagram,
+            linkedin,
+            description
+        } = req.body;
+
+        // First, create the user in utilisateurs table
+        const createUserQuery = `
+            INSERT INTO utilisateurs (nom, email, telephone, gouvernorat, rôle)
+            VALUES (?, ?, ?, ?, 'artisan')
+        `;
+
+        const [userResult] = await db.promise().query(createUserQuery, [
+            nom,
+            email,
+            telephone,
+            gouvernorat
+        ]);
+
+        const userId = userResult.insertId;
+
+        // Then, create the artisan record
+        const createArtisanQuery = `
+            INSERT INTO artisans (
+                spécialité,
+                localisation,
+                expérience,
+                utilisateur_id,
+                tarif_horaire,
+                facebook,
+                instagram,
+                linkedin,
+                description,
+                user_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        await db.promise().query(createArtisanQuery, [
+            spécialité,
+            localisation,
+            expérience,
+            userId,
+            tarif_horaire,
+            facebook || null,
+            instagram || null,
+            linkedin || null,
+            description || null,
+            userId
+        ]);
+
+        res.json({ success: true, message: 'تم إضافة الحرفي بنجاح' });
+    } catch (error) {
+        console.error('Error creating artisan:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.code === 'ER_DUP_ENTRY' ? 'البريد الإلكتروني مستخدم بالفعل' : 'حدث خطأ أثناء إضافة الحرفي'
+        });
+    }
+});
+
 // TEMPORARY ROUTE: Add 'actif' column to utilisateurs table if it doesn't exist
 router.get('/add-actif-column', checkAdminAuth, (req, res) => {
     const alterQuery = `ALTER TABLE utilisateurs ADD COLUMN actif TINYINT(1) DEFAULT 1`;
@@ -781,6 +854,81 @@ router.get('/artisan-reviews/:artisanId', async (req, res) => {
 });
 
 // Get client list data for DataTable
+router.get('/client-list/data', checkAdminAuth, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id, 
+                u.nom, 
+                u.email, 
+                u.telephone,
+                u.gouvernorat
+            FROM utilisateurs u
+            WHERE u.rôle = 'client'
+            ORDER BY u.id DESC
+        `;
+
+        const [clients] = await db.promise().query(query);
+
+        res.json({
+            draw: parseInt(req.query.draw || '1'),
+            recordsTotal: clients.length,
+            recordsFiltered: clients.length,
+            data: clients.map(client => ({
+                ...client,
+                actions: `
+                    <div class="flex space-x-2 rtl:space-x-reverse justify-center">
+                        <button onclick="viewClient(${client.id})" class="text-blue-500 hover:text-blue-700 mx-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button onclick="deleteClient(${client.id})" class="text-red-500 hover:text-red-700 mx-1">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching clients:', error);
+        res.status(500).json({ error: 'Error fetching clients data' });
+    }
+});
+
+// Delete client
+router.delete('/client/:id', checkAdminAuth, async (req, res) => {
+    try {
+        const clientId = req.params.id;
+        
+        // First check if client exists and is a client
+        const [client] = await db.promise().query(
+            'SELECT * FROM utilisateurs WHERE id = ? AND rôle = "client"',
+            [clientId]
+        );
+
+        if (client.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'العميل غير موجود' 
+            });
+        }
+
+        // Delete related records first
+        await db.promise().query('DELETE FROM demandes WHERE client_id = ?', [clientId]);
+        
+        // Then delete the user
+        await db.promise().query('DELETE FROM utilisateurs WHERE id = ?', [clientId]);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting client:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء حذف العميل' 
+        });
+    }
+});
+
+// Get clients data for DataTable
 router.get('/client-list/data', checkAdminAuth, async (req, res) => {
     try {
         const query = `

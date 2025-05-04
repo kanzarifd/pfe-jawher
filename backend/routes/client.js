@@ -3,13 +3,14 @@ const router = express.Router();
 const db = require('../config/database');
 const { checkClientAuth,checkAuth } = require('../middleware/auth');
 
-router.get('/', checkClientAuth, (req, res) => {
+router.get('/', (req, res) => {
     const query = `
         SELECT a.*, u.nom, u.email, u.photo_profile, u.telephone,
-               a.facebook, a.instagram, a.linkedin
+               a.facebook, a.instagram, a.linkedin, u.gouvernorat, u.ville
         FROM artisans a 
         JOIN utilisateurs u ON a.utilisateur_id = u.id
         WHERE u.rôle = 'artisan'
+        ORDER BY u.photo_profile ASC
     `;
     
     db.query(query, (err, artisans) => {
@@ -20,6 +21,36 @@ router.get('/', checkClientAuth, (req, res) => {
                 artisans: []
             });
         }
+
+        // Format artisans data
+        const formattedArtisans = artisans.map(artisan => {
+            let photoProfile = null;
+            if (artisan.photo_profile) {
+                try {
+                    photoProfile = Buffer.from(artisan.photo_profile).toString('base64');
+                } catch (error) {
+                    console.error('Error converting photo to base64:', error);
+                }
+            }
+
+            return {
+                id: artisan.id,
+                nom: artisan.nom,
+                email: artisan.email,
+                telephone: artisan.telephone,
+                spécialité: artisan.spécialité,
+                localisation: artisan.localisation,
+                gouvernorat: artisan.gouvernorat,
+                ville: artisan.ville,
+                rating: artisan.rating || 0,
+                disponibilité: artisan.disponibilité || false,
+                expérience: artisan.expérience,
+                photo_profile: photoProfile,
+                facebook: artisan.facebook,
+                instagram: artisan.instagram,
+                linkedin: artisan.linkedin
+            };
+        });
 
         // Get distinct gouvernorats
         const gouvernoratQuery = `
@@ -48,22 +79,6 @@ router.get('/', checkClientAuth, (req, res) => {
                     console.error('Error fetching villes:', err);
                     villes = [];
                 }
-
-                const formattedArtisans = artisans.map(artisan => ({
-                    id: artisan.id,
-                    nom: artisan.nom,
-                    email: artisan.email,
-                    telephone: artisan.telephone,
-                    spécialité: artisan.spécialité,
-                    localisation: artisan.localisation,
-                    rating: artisan.rating || 0,
-                    disponibilité: artisan.disponibilité || false,
-                    expérience: artisan.expérience,
-                    photo_profile: artisan.photo_profile ? Buffer.from(artisan.photo_profile).toString('base64') : null,
-                    facebook: artisan.facebook,
-                    instagram: artisan.instagram,
-                    linkedin: artisan.linkedin
-                }));
 
                 res.render('client/index', { 
                     title: 'TN M3allim - Client',
