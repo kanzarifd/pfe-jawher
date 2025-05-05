@@ -234,6 +234,45 @@ ink o l        .nav-link {
                         </div>
                     </div>
 
+                    <!-- Gallery Section (only for artisans) -->
+                    <div class="profile-card bg-white p-6 rounded-xl shadow-sm" x-show="userData.rôle === 'artisan'">
+                        <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
+                            <i class="fas fa-images text-blue-500 ml-2"></i>
+                            معرض الأعمال
+                        </h2>
+                        
+                        <!-- Gallery Grid -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <!-- Gallery Items -->
+                            <template x-for="(image, index) in formData.gallery" :key="index">
+                                <div class="relative group aspect-square bg-gray-50 rounded-xl overflow-hidden">
+                                    <img :src="`/public/uploads/gallery/${image.filename}`" 
+                                         class="w-full h-full object-cover"
+                                         @error="$event.target.src = '/public/img/placeholder.jpg'"
+                                         :alt="`Gallery image ${index + 1}`">
+                                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button type="button" class="p-2 bg-white rounded-full text-red-500 hover:text-red-700"
+                                                @click="removeImage(index)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Add Image Button -->
+                            <div class="aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors"
+                                 @click="document.getElementById('galleryInput').click()">
+                                <div class="text-center">
+                                    <i class="fas fa-plus text-gray-400 text-2xl mb-2"></i>
+                                    <p class="text-sm text-gray-500">إضافة صورة</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hidden File Input -->
+                        <input type="file" id="galleryInput" class="hidden" accept="image/*" multiple @change="uploadGalleryImages">
+                    </div>
+
                     <!-- Location Information -->
                     <div class="profile-card bg-white p-6 rounded-xl shadow-sm">
                         <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
@@ -283,39 +322,6 @@ ink o l        .nav-link {
                                        x-model="formData.postalCode">
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Gallery Section (only for artisans) -->
-                    <div class="profile-card bg-white p-6 rounded-xl shadow-sm" x-show="userData.role == 'artisan'">
-                        <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
-                            <i class="fas fa-images text-blue-500 ml-2"></i>
-                            معرض الأعمال
-                        </h2>
-                        <!-- Gallery Section -->
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                            <!-- Gallery Section -->
-                            <template x-for="(image, index) in formData.gallery" :key="index">
-                                <div class="relative group aspect-square bg-gray-50 rounded-xl overflow-hidden">
-                                    <img :src="image.preview || `/uploads/gallery/${image.image_path}`" 
-                                         class="w-full h-full object-cover"
-                                         @error="console.log('Image load error:', image); $event.target.src = '/img/placeholder.jpg'">
-                                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <button type="button" class="p-2 bg-white rounded-full text-red-500 hover:text-red-700"
-                                                @click="removeImage(index)">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </template>
-                            <div class="aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors"
-                                 @click="document.getElementById('galleryInput').click()">
-                                <div class="text-center">
-                                    <i class="fas fa-plus text-gray-400 text-2xl mb-2"></i>
-                                    <p class="text-sm text-gray-500">إضافة صورة</p>
-                                </div>
-                            </div>
-                        </div>
-                        <input type="file" id="galleryInput" class="hidden" accept="image/*" multiple @change="uploadGalleryImages">
                     </div>
 
                     <!-- Status Messages -->
@@ -372,13 +378,8 @@ ink o l        .nav-link {
                     ]
                 },
                 formData: {
-                    profilePhoto: {
-                        file: null,
-                        preview: null,
-                        remove: false
-                    },
-                    email: '',
                     fullname: '',
+                    email: '',
                     phone: '',
                     address: '',
                     currentPassword: '',
@@ -393,45 +394,58 @@ ink o l        .nav-link {
                     galleryToRemove: [],
                     facebook: '',
                     instagram: '',
-                    linkedin: ''
+                    linkedin: '',
+                    profilePhoto: {
+                        file: null,
+                        preview: null
+                    }
                 },
                 
                 async init() {
                     try {
                         const response = await fetch('/profile/data');
                         const data = await response.json();
+                        console.log('Profile data:', data);
                         this.userData = data;
                         
                         // Initialize form data with user data
-                        this.formData.fullname = data.name || '';
-                        this.formData.email = data.email || '';
-                        this.formData.phone = data.phone || '';
-                        this.formData.address = data.address || '';
-                        this.formData.governorate = data.governorate || '';
-                        this.formData.city = data.city || '';
-                        this.formData.postalCode = data.postal_code || '';
-                        
-                        if (data.artisan) {
-                            this.formData.profession = data.artisan.spécialité || '';
-                            this.formData.experience = data.artisan.expérience || '';
-                            this.formData.hourlyRate = data.artisan.tarif_horaire || '';
-                            this.formData.description = data.artisan.description || '';
-                        }
-                        
+                        this.formData = {
+                            fullname: data.nom || '',
+                            email: data.email || '',
+                            phone: data.telephone || '',
+                            address: data.adresse || '',
+                            governorate: data.gouvernorat || '',
+                            city: data.ville || '',
+                            postalCode: data.code_postal || '',
+                            profession: data.spécialité || '',
+                            experience: data.expérience || '',
+                            hourlyRate: data.tarif_horaire || '',
+                            description: data.description || '',
+                            profilePhoto: {
+                                file: null,
+                                preview: null
+                            },
+                            gallery: []
+                        };
+
                         // Load gallery if user is artisan
                         if (data.rôle === 'artisan') {
                             const galleryResponse = await fetch('/profile/gallery');
                             const galleryData = await galleryResponse.json();
+                            console.log('Gallery data:', galleryData);
                             this.formData.gallery = galleryData.map(item => ({
-                            id: item.id,
-                            image_path: item.filename,  // Changed from filename to image_path
-                            preview: item.preview || null,
-                            isNew: false
+                                id: item.id,
+                                image_path: item.filename,
+                                preview: null,
+                                isNew: false
                             }));
                         }
                     } catch (error) {
                         console.error('Error loading profile data:', error);
-                        this.message = { text: 'حدث خطأ في تحميل بيانات الملف الشخصي', type: 'error' };
+                        this.message = { 
+                            type: 'error',
+                            text: 'حدث خطأ في تحميل بيانات الملف الشخصي'
+                        };
                     }
                 },
                 
@@ -523,32 +537,74 @@ ink o l        .nav-link {
                     }
                 },
                 
-                uploadGalleryImages(event) {
+                async uploadGalleryImages(event) {
                     const files = event.target.files;
-                    for (let file of files) {
-                        this.formData.gallery.push({
-                            file: file,
-                            preview: URL.createObjectURL(file),
-                            isNew: true
+                    if (!files || files.length === 0) return;
+
+                    const formData = new FormData();
+                    for (let i = 0; i < files.length; i++) {
+                        formData.append('gallery', files[i]);
+                    }
+
+                    try {
+                        const response = await fetch('/profile/gallery', {
+                            method: 'POST',
+                            body: formData
                         });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            // Add new images to the gallery
+                            this.formData.gallery = [
+                                ...this.formData.gallery,
+                                ...result.images
+                            ];
+                            this.message = {
+                                type: 'success',
+                                text: result.message
+                            };
+                        } else {
+                            throw new Error(result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error uploading images:', error);
+                        this.message = {
+                            type: 'error',
+                            text: error.message || 'حدث خطأ أثناء تحميل الصور'
+                        };
                     }
+
+                    // Clear the input
+                    event.target.value = '';
                 },
-                
-                removeImage(index) {
+
+                async removeImage(index) {
                     const image = this.formData.gallery[index];
-                    
-                    // If it's an existing image, mark it for removal
-                    if (image.id) {
-                        this.formData.galleryToRemove.push(image.id);
+                    if (!image) return;
+
+                    try {
+                        const response = await fetch(`/profile/gallery/${image.filename}`, {
+                            method: 'DELETE'
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            // Remove the image from the gallery
+                            this.formData.gallery.splice(index, 1);
+                            this.message = {
+                                type: 'success',
+                                text: result.message
+                            };
+                        } else {
+                            throw new Error(result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error deleting image:', error);
+                        this.message = {
+                            type: 'error',
+                            text: error.message || 'حدث خطأ أثناء حذف الصورة'
+                        };
                     }
-                    
-                    // If it has a preview URL, revoke it
-                    if (image.preview) {
-                        URL.revokeObjectURL(image.preview);
-                    }
-                    
-                    // Remove from gallery array
-                    this.formData.gallery.splice(index, 1);
                 },
                 
                 async fetchProfileData() {

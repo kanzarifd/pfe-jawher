@@ -41,6 +41,40 @@ const uploadPhoto = multer({
     }
 });
 
+// Configure multer for gallery uploads
+const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery');
+
+const galleryStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        if (!fs.existsSync(galleryDir)) {
+            fs.mkdirSync(galleryDir, { recursive: true });
+        }
+        cb(null, galleryDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+        const filename = req.session.userId + '_' + uniqueSuffix + path.extname(file.originalname);
+        cb(null, filename);
+    }
+});
+
+const galleryUpload = multer({
+    storage: galleryStorage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+        const filetypes = /jpeg|jpg|png/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('يرجى تحميل صور بصيغة: jpg, jpeg, png فقط'));
+    }
+});
+
 // Route pour la page profile
 router.get('/', checkArtisanAuth, checkAuth, async (req, res) => {
     try {
@@ -72,8 +106,6 @@ router.get('/', checkArtisanAuth, checkAuth, async (req, res) => {
         res.status(500).send('Internal Server Error');
     }
 });
-
-const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery');
 
 // Get profile data
 router.get('/data', checkAuth, (req, res) => {
@@ -497,50 +529,144 @@ router.post('/update-profile', checkAuth, upload.fields([
     }
 });
 
-router.get('/gallery', checkAuth, (req, res) => {
-    const userId = req.session.userId;
-    
-    const checkArtisanQuery = `
-        SELECT id FROM artisans WHERE utilisateur_id = ?
-    `;
-    
-    db.query(checkArtisanQuery, [userId], (err, artisanResults) => {
-        if (err) {
-            console.error('Error checking artisan:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
+// Get gallery images
+router.get('/gallery', checkAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
         
-        if (!artisanResults || artisanResults.length === 0) {
-            console.log('No artisan found for user:', userId);
+        // Get artisan ID
+        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
+        if (!artisanResult || artisanResult.length === 0) {
             return res.json([]);
         }
         
-        const artisanId = artisanResults[0].id;
+        const artisanId = artisanResult[0].id;
+        const query = 'SELECT id, image_path as filename FROM gallery WHERE artisan_id = ? ORDER BY created_at ASC';
+        const [images] = await db.promise().query(query, [artisanId]);
         
-        const galleryQuery = `
-            SELECT id, image_path
-            FROM gallery
-            WHERE artisan_id = ?
-        `;
-        
-        db.query(galleryQuery, [artisanId], (err, results) => {
-            if (err) {
-                console.error('Error fetching gallery:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            
-            console.log('Gallery results:', results); // Debug log
-            
-            const gallery = results.map(item => ({
-                id: item.id,
-                filename: item.image_path,
-                // Update the preview path to include the full URL structure
-                preview: `/public/uploads/gallery/${item.image_path}`
-            }));
-            
-            res.json(gallery);
+        console.log('Gallery images:', images);
+        res.json(images);
+    } catch (error) {
+        console.error('Error fetching gallery:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'حدث خطأ أثناء جلب الصور' 
         });
-    });
+    }
+});
+
+// Upload gallery images
+router.post('/gallery', checkAuth, galleryUpload.array('gallery', 10), async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const files = req.files;
+
+        if (!files || files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'لم يتم تحديد أي صور'
+            });
+        }
+
+        // Get artisan ID
+        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
+        if (!artisanResult || artisanResult.length === 0) {
+            // Clean up uploaded files
+            files.forEach(file => {
+                const filePath = path.join(galleryDir, file.filename);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+            
+            return res.status(404).json({
+                success: false,
+                message: 'لم يتم العثور على حساب الحرفي'
+            });
+        }
+
+        const artisanId = artisanResult[0].id;
+        
+        // Save only the filename, not the full path
+        const values = files.map(file => [artisanId, file.filename]);
+        const query = 'INSERT INTO gallery (artisan_id, image_path) VALUES ?';
+        const [result] = await db.promise().query(query, [values]);
+
+        // Return the newly uploaded images with their IDs
+        const insertedIds = Array.from({ length: files.length }, (_, i) => result.insertId + i);
+        const images = files.map((file, index) => ({
+            id: insertedIds[index],
+            filename: file.filename
+        }));
+
+        res.json({
+            success: true,
+            message: 'تم تحميل الصور بنجاح',
+            images: images
+        });
+    } catch (error) {
+        console.error('Error uploading gallery images:', error);
+        // Clean up any uploaded files if there was an error
+        if (req.files) {
+            req.files.forEach(file => {
+                const filePath = path.join(galleryDir, file.filename);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء تحميل الصور'
+        });
+    }
+});
+
+// Delete gallery image
+router.delete('/gallery/:filename', checkAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const filename = req.params.filename;
+
+        // Get artisan ID
+        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
+        if (!artisanResult || artisanResult.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'لم يتم العثور على حساب الحرفي'
+            });
+        }
+
+        const artisanId = artisanResult[0].id;
+        
+        // Delete from database
+        const query = 'DELETE FROM gallery WHERE artisan_id = ? AND image_path = ?';
+        const [result] = await db.promise().query(query, [artisanId, filename]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'الصورة غير موجودة'
+            });
+        }
+
+        // Delete file from uploads
+        const filePath = path.join(galleryDir, filename);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        res.json({
+            success: true,
+            message: 'تم حذف الصورة بنجاح'
+        });
+    } catch (error) {
+        console.error('Error deleting gallery image:', error);
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ أثناء حذف الصورة'
+        });
+    }
 });
 
 module.exports = router;

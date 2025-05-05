@@ -4,6 +4,7 @@ const db = require('../config/database');
 const transporter = require('../config/email');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+
 // Update login page route to redirect if already logged in
 router.get('/login', (req, res) => {
     if (req.session.userId) {
@@ -26,21 +27,16 @@ router.get('/signup', (req, res) => {
 
 // Inscription d'un utilisateur
 router.post('/signup', (req, res) => {
-    const { name, email, password, role, date_naissance, telephone, adresse, gouvernorat, ville, code_postal } = req.body;
+    const { nom, email, mot_de_passe, rôle, telephone, adresse, gouvernorat } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password || !role || !date_naissance || !telephone || !adresse || !gouvernorat || !ville || !code_postal) {
+    if (!nom || !email || !mot_de_passe || !rôle || !telephone || !adresse || !gouvernorat) {
         return res.json({ success: false, message: 'جميع الحقول مطلوبة' });
     }
 
     // Validate phone number
     if (telephone.length !== 8 || !/^\d+$/.test(telephone)) {
         return res.json({ success: false, message: 'رقم الهاتف غير صالح' });
-    }
-
-    // Validate postal code
-    if (code_postal.length !== 4 || !/^\d+$/.test(code_postal)) {
-        return res.json({ success: false, message: 'الرمز البريدي غير صالح' });
     }
 
     // Validate email format
@@ -50,34 +46,34 @@ router.post('/signup', (req, res) => {
     }
 
     // Validate password length
-    if (password.length < 8) {
+    if (mot_de_passe.length < 8) {
         return res.json({ success: false, message: 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل' });
     }
 
-    // Vérifier si l'utilisateur existe déjà
+    // Check if user already exists
     db.query('SELECT * FROM utilisateurs WHERE email = ?', [email], (err, results) => {
         if (err) {
-            console.error('Erreur lors de la vérification de l\'email:', err);
-            return res.status(500).json({ success: false, message: 'Erreur serveur' });
+            console.error('Error checking email:', err);
+            return res.status(500).json({ success: false, message: 'خطأ في الخادم' });
         }
 
         if (results.length > 0) {
             return res.json({ success: false, message: 'هذا البريد الإلكتروني مستخدم بالفعل' });
         }
 
-        // Hachage du mot de passe
-        bcrypt.hash(password, 10, (err, hashedPassword) => {
+        // Hash password
+        bcrypt.hash(mot_de_passe, 10, (err, hashedPassword) => {
             if (err) {
-                console.error('Erreur de hachage:', err);
-                return res.status(500).json({ success: false, message: 'Erreur serveur' });
+                console.error('Hashing error:', err);
+                return res.status(500).json({ success: false, message: 'خطأ في الخادم' });
             }
 
-            // Insertion dans la base de données
-            const query = 'INSERT INTO utilisateurs (nom, email, mot_de_passe, rôle, date_naissance, telephone, adresse, gouvernorat, ville, code_postal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-            db.query(query, [name, email, hashedPassword, role, date_naissance, telephone, adresse, gouvernorat, ville, code_postal], (err) => {
+            // Insert into database
+            const query = 'INSERT INTO utilisateurs (nom, email, mot_de_passe, rôle, telephone, adresse, gouvernorat) VALUES (?, ?, ?, ?, ?, ?, ?)';
+            db.query(query, [nom, email, hashedPassword, rôle, telephone, adresse, gouvernorat], (err) => {
                 if (err) {
-                    console.error('Erreur lors de l\'ajout de l\'utilisateur:', err);
-                    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+                    console.error('Error adding user:', err);
+                    return res.status(500).json({ success: false, message: 'خطأ في الخادم' });
                 }
 
                 res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
