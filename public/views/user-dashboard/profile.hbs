@@ -71,7 +71,7 @@
 
                         <!-- File Input (hidden) -->
                         <input type="file"
-                               name="photo_profile"
+                               name="profilePhoto"
                                x-ref="photo"
                                @change="handlePhotoChange"
                                class="hidden"
@@ -216,7 +216,7 @@
                     Object.keys(this.form).forEach(key => {
                         if (this.form[key]) {
                             if (key === 'photo') {
-                                formData.append('photo_profile', this.form[key]);
+                                formData.append('profilePhoto', this.form[key]);
                             } else {
                                 formData.append(key, this.form[key]);
                             }
@@ -224,7 +224,7 @@
                     });
 
                     try {
-                        const response = await fetch('/user-dashboard/update-profile', {
+                        const response = await fetch('/profile/update-profile', {
                             method: 'POST',
                             body: formData
                         });
@@ -245,7 +245,7 @@
                                     this.user.photo_profile = result.user.photo_profile;
                                     // Update all profile images on the page
                                     document.querySelectorAll('#profile-image').forEach(img => {
-                                        img.src = '/' + result.user.photo_profile;
+                                        img.src = result.user.photo_profile;
                                     });
                                 }
                             }

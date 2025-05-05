@@ -200,19 +200,49 @@ router.post('/update-profile', checkAuth, upload.fields([
                 if (req.files && req.files.profilePhoto) {
                     const profilePhoto = req.files.profilePhoto[0];
                     
-                    // Read the file buffer
-                    const updatePhotoQuery = `
-                        UPDATE utilisateurs 
-                        SET photo_profile = ?
-                        WHERE id = ?
-                    `;
-                    
-                    db.query(updatePhotoQuery, [profilePhoto.buffer, userId], (err, result) => {
+                    // Convert the file to buffer
+                    const photoBuffer = profilePhoto.buffer;
+
+                    // Update the photo in the database
+                    const updatePhotoQuery = 'UPDATE utilisateurs SET photo_profile = ? WHERE id = ?';
+                    db.query(updatePhotoQuery, [photoBuffer, userId], (err, result) => {
                         if (err) {
                             console.error('Error updating profile photo:', err);
-                        } else {
-                            console.log('Profile photo updated successfully');
+                            return res.status(500).json({
+                                success: false,
+                                message: 'Error updating profile photo'
+                            });
                         }
+
+                        // Get the updated user data to send back
+                        const getUserQuery = 'SELECT * FROM utilisateurs WHERE id = ?';
+                        db.query(getUserQuery, [userId], (err, results) => {
+                            if (err || !results.length) {
+                                return res.json({ 
+                                    success: true, 
+                                    message: 'تم تحديث الملف الشخصي بنجاح'
+                                });
+                            }
+
+                            const userData = results[0];
+                            const photo_profile = userData.photo_profile 
+                                ? `data:image/jpeg;base64,${userData.photo_profile.toString('base64')}`
+                                : null;
+
+                            res.json({
+                                success: true,
+                                message: 'تم تحديث الملف الشخصي بنجاح',
+                                user: {
+                                    ...userData,
+                                    photo_profile
+                                }
+                            });
+                        });
+                    });
+                } else {
+                    res.json({ 
+                        success: true, 
+                        message: 'تم تحديث الملف الشخصي بنجاح'
                     });
                 }
                 
@@ -328,8 +358,6 @@ router.post('/update-profile', checkAuth, upload.fields([
                 if (fullname && fullname !== req.session.userName) {
                     req.session.userName = fullname;
                 }
-                
-                res.json({ success: true, message: 'تم تحديث الملف الشخصي بنجاح' });
             }
         );
     } catch (error) {

@@ -858,39 +858,33 @@ router.get('/client-list/data', checkAdminAuth, async (req, res) => {
     try {
         const query = `
             SELECT 
-                u.id, 
-                u.nom, 
-                u.email, 
-                u.telephone,
-                u.gouvernorat
-            FROM utilisateurs u
-            WHERE u.rôle = 'client'
-            ORDER BY u.id DESC
+                id,
+                nom,
+                email,
+                telephone,
+                gouvernorat,
+                photo_profile
+            FROM utilisateurs
+            WHERE rôle = 'client'
+            ORDER BY id DESC
         `;
 
-        const [clients] = await db.promise().query(query);
+        const [results] = await db.promise().query(query);
 
-        res.json({
-            draw: parseInt(req.query.draw || '1'),
-            recordsTotal: clients.length,
-            recordsFiltered: clients.length,
-            data: clients.map(client => ({
-                ...client,
-                actions: `
-                    <div class="flex space-x-2 rtl:space-x-reverse justify-center">
-                        <button onclick="viewClient(${client.id})" class="text-blue-500 hover:text-blue-700 mx-1">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button onclick="deleteClient(${client.id})" class="text-red-500 hover:text-red-700 mx-1">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                `
-            }))
-        });
+        // Format the results
+        const formattedResults = results.map(client => ({
+            id: client.id,
+            nom: client.nom,
+            email: client.email,
+            telephone: client.telephone,
+            gouvernorat: client.gouvernorat,
+            photo_profile: client.photo_profile ? Buffer.from(client.photo_profile).toString('base64') : null
+        }));
+
+        res.json(formattedResults);
     } catch (error) {
-        console.error('Error fetching clients:', error);
-        res.status(500).json({ error: 'Error fetching clients data' });
+        console.error('Error fetching client list:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

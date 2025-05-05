@@ -2,213 +2,146 @@
 <html lang="ar" dir="rtl">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{title}}</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .dashboard-card {
-            transition: transform 0.2s ease-in-out;
-        }
-        .dashboard-card:hover {
-            transform: translateY(-5px);
-        }
-        .nav-link {
-            transition: all 0.3s ease;
-        }
-        .nav-link:hover {
-            transform: translateX(-5px);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .dashboard-card {
+      transition: transform 0.2s ease-in-out;
+    }
+
+    .dashboard-card:hover {
+      transform: translateY(-5px);
+    }
+  </style>
 </head>
 
-<body class="bg-gray-50">
-    <!-- Sidebar -->
-    <aside class="fixed h-full w-72 bg-gradient-to-b from-green-600 to-green-800 text-white shadow-xl">
-        <div class="p-8">
-            <h1 class="text-2xl font-bold text-center border-b border-green-400 pb-4 mb-6">لوحة التحكم</h1>
+<body class="bg-slate-100 font-sans flex h-screen flex-col md:flex-row">
+  {{> adminSidebar}}
+  <main class="flex-grow p-6 md:p-12">
+    
+    <div class="max-w-full mx-auto">
+        
+      <header class="mb-10">
+        <h1 class="text-3xl font-bold text-slate-800 mb-2">مرحباً بك في لوحة التحكم</h1>
+        <p class="text-slate-600">تفقد آخر الإحصائيات والتحديثات</p>
+      </header>
 
-            <div class="flex flex-col items-center mb-8">
-                <div class="relative">
-                    <img class="w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover" src="/img/logo.png" alt="Admin">
-                    <div class="absolute bottom-0 right-0 w-4 h-4 bg-green-400 rounded-full border-2 border-white"></div>
-                </div>
-                <p class="mt-4 text-lg font-semibold text-green-100">{{user.name}}</p>
+      <!-- Statistics Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <!-- Card -->
+        <div class="dashboard-card bg-white rounded-xl shadow p-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm text-gray-500 mb-1">المستخدمين</p>
+              <h3 class="text-2xl font-bold text-gray-800" id="totalUsers">0</h3>
             </div>
-
-            <nav class="space-y-3">
-                <a href="/admin/settings" class="nav-link flex items-center p-4 bg-green-700 hover:bg-green-900 rounded-xl transition-all">
-                    <span class="text-xl">🛠️</span>
-                    <span class="mr-3 font-medium">إدارة الحسابات</span>
-                </a>
-                <a href="/admin/client-list" class="nav-link flex items-center p-4 bg-green-700 hover:bg-green-900 rounded-xl transition-all">
-                    <span class="text-xl">👥</span>
-                    <span class="mr-3 font-medium">قائمة الحرفاء</span>
-                </a>
-                <a href="/admin/artisan-list" class="nav-link flex items-center p-4 bg-green-700 hover:bg-green-900 rounded-xl transition-all">
-                    <span class="text-xl">🏭</span>
-                    <span class="mr-3 font-medium">قائمة الحرفيين</span>
-                </a>
-                <a href="/admin/user-messages" class="nav-link flex items-center p-4 bg-green-700 hover:bg-green-900 rounded-xl transition-all">
-                    <span class="text-xl">✉️</span>
-                    <span class="mr-3 font-medium">رسائل المستخدم</span>
-                </a>
-                <a href="/admin/settings" class="nav-link flex items-center p-4 bg-green-700 hover:bg-green-900 rounded-xl transition-all">
-                    <span class="text-xl">⚙️</span>
-                    <span class="mr-3 font-medium">الإعدادات</span>
-                </a>
-            </nav>
+            <div class="bg-blue-100 p-3 rounded-xl">
+              <!-- Icon -->
+            </div>
+          </div>
         </div>
-    </aside>
 
-    <div class="mr-72 p-8">
-        <div class="max-w-7xl mx-auto">
-            <header class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-800">مرحباً بك في لوحة التحكم</h1>
-                <p class="text-gray-600 mt-2">تفقد آخر الإحصائيات والتحديثات</p>
-            </header>
-
-            <!-- Statistics Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <!-- Total Users Card -->
-                <div class="dashboard-card bg-white rounded-xl shadow-sm hover:shadow-md p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium mb-1">المستخدمين</p>
-                            <h3 class="text-3xl font-bold text-gray-800" id="totalUsers">0</h3>
-                        </div>
-                        <div class="bg-blue-100 p-4 rounded-xl">
-                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Artisans Card -->
-                <div class="dashboard-card bg-white rounded-xl shadow-sm hover:shadow-md p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium mb-1">الحرفيين</p>
-                            <h3 class="text-3xl font-bold text-gray-800" id="artisans">0</h3>
-                        </div>
-                        <div class="bg-green-100 p-4 rounded-xl">
-                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Clients Card -->
-                <div class="dashboard-card bg-white rounded-xl shadow-sm hover:shadow-md p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium mb-1">الحرفاء</p>
-                            <h3 class="text-3xl font-bold text-gray-800" id="clients">0</h3>
-                        </div>
-                        <div class="bg-purple-100 p-4 rounded-xl">
-                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Reports Card -->
-                <div class="dashboard-card bg-white rounded-xl shadow-sm hover:shadow-md p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium mb-1">التقارير</p>
-                            <h3 class="text-3xl font-bold text-gray-800" id="messages">0</h3>
-                        </div>
-                        <div class="bg-yellow-100 p-4 rounded-xl">
-                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
+        <div class="dashboard-card bg-white rounded-xl shadow p-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm text-gray-500 mb-1">الحرفيين</p>
+              <h3 class="text-2xl font-bold text-gray-800" id="artisans">0</h3>
             </div>
-
-            <!-- Recent Reports Table -->
-            <div class="bg-white rounded-xl shadow-sm p-6">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-bold text-gray-800">أحدث التقارير</h2>
-                    <button class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">تحديث</button>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    معرف الحرفي
-                                </th>
-                                <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    مشكلة في التنقل
-                                </th>
-                                <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    مشكلة في التصميم
-                                </th>
-                                <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    التعليقات
-                                </th>
-                                <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    التاريخ
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody id="reportsTableBody" class="bg-white divide-y divide-gray-200">
-                            <!-- Reports will be inserted here -->
-                        </tbody>
-                    </table>
-                </div>
+            <div class="bg-green-100 p-3 rounded-xl">
+              <!-- Icon -->
             </div>
+          </div>
         </div>
+
+        <div class="dashboard-card bg-white rounded-xl shadow p-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm text-gray-500 mb-1">الحرفاء</p>
+              <h3 class="text-2xl font-bold text-gray-800" id="clients">0</h3>
+            </div>
+            <div class="bg-purple-100 p-3 rounded-xl">
+              <!-- Icon -->
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-card bg-white rounded-xl shadow p-6">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm text-gray-500 mb-1">التقارير</p>
+              <h3 class="text-2xl font-bold text-gray-800" id="messages">0</h3>
+            </div>
+            <div class="bg-yellow-100 p-3 rounded-xl">
+              <!-- Icon -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Reports Table -->
+      <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold text-gray-800">أحدث التقارير</h2>
+          <button class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">تحديث</button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-right border-collapse">
+            <thead class="bg-gray-50 border-b">
+              <tr>
+                <th class="px-6 py-3 text-gray-500 font-semibold">معرف الحرفي</th>
+                <th class="px-6 py-3 text-gray-500 font-semibold">مشكلة في التنقل</th>
+                <th class="px-6 py-3 text-gray-500 font-semibold">مشكلة في التصميم</th>
+                <th class="px-6 py-3 text-gray-500 font-semibold">التعليقات</th>
+                <th class="px-6 py-3 text-gray-500 font-semibold">التاريخ</th>
+              </tr>
+            </thead>
+            <tbody id="reportsTableBody" class="divide-y divide-gray-200">
+              <!-- Dynamic Content -->
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
+  </main>
 
-    <script>
-        async function loadDashboardData() {
-            try {
-                const response = await fetch('/admin/dashboard-data');
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                const data = await response.json();
+  <script>
+    async function loadDashboardData() {
+      try {
+        const response = await fetch('/admin/dashboard-data');
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
 
-                // Update statistics
-                document.getElementById('totalUsers').textContent = data.totalUsers;
-                document.getElementById('artisans').textContent = data.artisans;
-                document.getElementById('clients').textContent = data.clients;
-                document.getElementById('messages').textContent = data.messages;
+        document.getElementById('totalUsers').textContent = data.totalUsers;
+        document.getElementById('artisans').textContent = data.artisans;
+        document.getElementById('clients').textContent = data.clients;
+        document.getElementById('messages').textContent = data.messages;
 
-                // Update reports table
-                const reportsTableBody = document.getElementById('reportsTableBody');
-                reportsTableBody.innerHTML = '';
+        const reportsTableBody = document.getElementById('reportsTableBody');
+        reportsTableBody.innerHTML = '';
+        data.reports.forEach(report => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="px-6 py-4 text-gray-700">${report.artisan_id}</td>
+            <td class="px-6 py-4 text-gray-700">${report.navigation_issue ? 'نعم' : 'لا'}</td>
+            <td class="px-6 py-4 text-gray-700">${report.design_issue ? 'نعم' : 'لا'}</td>
+            <td class="px-6 py-4 text-gray-700">${report.comments || '-'}</td>
+            <td class="px-6 py-4 text-gray-700">${new Date(report.created_at).toLocaleDateString('ar-TN')}</td>
+          `;
+          reportsTableBody.appendChild(row);
+        });
+      } catch (err) {
+        console.error('Dashboard error:', err);
+      }
+    }
 
-                data.reports.forEach(report => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${report.artisan_id}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${report.navigation_issue ? 'نعم' : 'لا'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${report.design_issue ? 'نعم' : 'لا'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${report.comments || '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(report.created_at).toLocaleDateString('ar-TN')}</td>
-                    `;
-                    reportsTableBody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error loading dashboard data:', error);
-            }
-        }
+    document.addEventListener('DOMContentLoaded', loadDashboardData);
+  </script>
 
-        // Load dashboard data when the page loads
-        document.addEventListener('DOMContentLoaded', loadDashboardData);
-    </script>
-    <script>
-        (function () { if (!window.chatbase || window.chatbase("getState") !== "initialized") { window.chatbase = (...arguments) => { if (!window.chatbase.q) { window.chatbase.q = [] } window.chatbase.q.push(arguments) }; window.chatbase = new Proxy(window.chatbase, { get(target, prop) { if (prop === "q") { return target.q } return (...args) => target(prop, ...args) } }) } const onLoad = function () { const script = document.createElement("script"); script.src = "https://www.chatbase.co/embed.min.js"; script.id = "yEG4DJMs1tC-Gv3P3TKnA"; script.domain = "www.chatbase.co"; document.body.appendChild(script) }; if (document.readyState === "complete") { onLoad() } else { window.addEventListener("load", onLoad) } })();
-    </script>
 </body>
 
 </html>
