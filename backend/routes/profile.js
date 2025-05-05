@@ -61,7 +61,7 @@ const galleryStorage = multer.diskStorage({
 const galleryUpload = multer({
     storage: galleryStorage,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
+        fileSize: 10 * 1024 * 1024 // 5MB limit
     },
     fileFilter: function (req, file, cb) {
         const filetypes = /jpeg|jpg|png/;
@@ -532,140 +532,149 @@ router.post('/update-profile', checkAuth, upload.fields([
 // Get gallery images
 router.get('/gallery', checkAuth, async (req, res) => {
     try {
-        const userId = req.session.userId;
-        
-        // Get artisan ID
-        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
-        if (!artisanResult || artisanResult.length === 0) {
+        // First get the artisan id for this user
+        const [artisan] = await db.promise().query(
+            'SELECT id FROM artisans WHERE utilisateur_id = ?',
+            [req.session.userId]
+        );
+
+        if (!artisan || artisan.length === 0) {
             return res.json([]);
         }
-        
-        const artisanId = artisanResult[0].id;
-        const query = 'SELECT id, image_path as filename FROM gallery WHERE artisan_id = ? ORDER BY created_at ASC';
-        const [images] = await db.promise().query(query, [artisanId]);
-        
+
+        const query = 'SELECT id, image_path as filename FROM gallery WHERE artisan_id = ? ORDER BY created_at DESC';
+        const [images] = await db.promise().query(query, [artisan[0].id]);
         console.log('Gallery images:', images);
         res.json(images);
     } catch (error) {
         console.error('Error fetching gallery:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'حدث خطأ أثناء جلب الصور' 
-        });
+        res.status(500).json({ success: false, error: 'حدث خطأ في جلب معرض الصور' });
     }
 });
 
 // Upload gallery images
 router.post('/gallery', checkAuth, galleryUpload.array('gallery', 10), async (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'لم يتم تحديد أي صور' });
+    }
+
+    const connection = await db.promise().getConnection();
     try {
-        const userId = req.session.userId;
-        const files = req.files;
+        await connection.beginTransaction();
 
-        if (!files || files.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'لم يتم تحديد أي صور'
-            });
+        // First get the artisan id for this user
+        const [artisan] = await connection.query(
+            'SELECT id FROM artisans WHERE utilisateur_id = ?',
+            [req.session.userId]
+        );
+
+        if (!artisan || artisan.length === 0) {
+            throw new Error('Artisan record not found');
         }
 
-        // Get artisan ID
-        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
-        if (!artisanResult || artisanResult.length === 0) {
-            // Clean up uploaded files
-            files.forEach(file => {
-                const filePath = path.join(galleryDir, file.filename);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
-            });
-            
-            return res.status(404).json({
-                success: false,
-                message: 'لم يتم العثور على حساب الحرفي'
-            });
-        }
-
-        const artisanId = artisanResult[0].id;
-        
-        // Save only the filename, not the full path
-        const values = files.map(file => [artisanId, file.filename]);
+        const artisanId = artisan[0].id;
+        const values = req.files.map(file => [artisanId, file.filename]);
         const query = 'INSERT INTO gallery (artisan_id, image_path) VALUES ?';
-        const [result] = await db.promise().query(query, [values]);
+        
+        const [result] = await connection.query(query, [values]);
+        
+        // Get the newly inserted images
+        const imageIds = Array.from({ length: req.files.length }, (_, i) => result.insertId + i);
+        const [images] = await connection.query(
+            'SELECT id, image_path as filename FROM gallery WHERE id IN (?)',
+            [imageIds]
+        );
 
-        // Return the newly uploaded images with their IDs
-        const insertedIds = Array.from({ length: files.length }, (_, i) => result.insertId + i);
-        const images = files.map((file, index) => ({
-            id: insertedIds[index],
-            filename: file.filename
-        }));
-
+        await connection.commit();
+        
         res.json({
             success: true,
-            message: 'تم تحميل الصور بنجاح',
+            message: 'تم رفع الصور بنجاح',
             images: images
         });
     } catch (error) {
+        await connection.rollback();
         console.error('Error uploading gallery images:', error);
-        // Clean up any uploaded files if there was an error
-        if (req.files) {
-            req.files.forEach(file => {
-                const filePath = path.join(galleryDir, file.filename);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
+        
+        // Delete uploaded files if database operation fails
+        req.files.forEach(file => {
+            fs.unlink(file.path, err => {
+                if (err) console.error('Error deleting file:', err);
             });
-        }
+        });
+        
         res.status(500).json({
             success: false,
-            message: 'حدث خطأ أثناء تحميل الصور'
+            message: error.message === 'Artisan record not found' 
+                ? 'لم يتم العثور على حساب الحرفي' 
+                : 'حدث خطأ أثناء رفع الصور'
         });
+    } finally {
+        connection.release();
     }
 });
 
 // Delete gallery image
 router.delete('/gallery/:filename', checkAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
     try {
-        const userId = req.session.userId;
-        const filename = req.params.filename;
+        await connection.beginTransaction();
 
-        // Get artisan ID
-        const [artisanResult] = await db.promise().query('SELECT id FROM artisans WHERE utilisateur_id = ?', [userId]);
-        if (!artisanResult || artisanResult.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'لم يتم العثور على حساب الحرفي'
-            });
+        // First get the artisan id for this user
+        const [artisan] = await connection.query(
+            'SELECT id FROM artisans WHERE utilisateur_id = ?',
+            [req.session.userId]
+        );
+
+        if (!artisan || artisan.length === 0) {
+            throw new Error('Artisan record not found');
         }
 
-        const artisanId = artisanResult[0].id;
-        
-        // Delete from database
-        const query = 'DELETE FROM gallery WHERE artisan_id = ? AND image_path = ?';
-        const [result] = await db.promise().query(query, [artisanId, filename]);
+        const artisanId = artisan[0].id;
 
-        if (result.affectedRows === 0) {
+        // Get image details and verify ownership
+        const [image] = await connection.query(
+            'SELECT * FROM gallery WHERE image_path = ? AND artisan_id = ?',
+            [req.params.filename, artisanId]
+        );
+
+        if (image.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'الصورة غير موجودة'
             });
         }
 
-        // Delete file from uploads
-        const filePath = path.join(galleryDir, filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
+        // Delete from database
+        await connection.query(
+            'DELETE FROM gallery WHERE image_path = ? AND artisan_id = ?',
+            [req.params.filename, artisanId]
+        );
 
+        // Delete file
+        const filePath = path.join(galleryDir, req.params.filename);
+        fs.unlink(filePath, err => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Error deleting file:', err);
+            }
+        });
+
+        await connection.commit();
         res.json({
             success: true,
             message: 'تم حذف الصورة بنجاح'
         });
     } catch (error) {
+        await connection.rollback();
         console.error('Error deleting gallery image:', error);
         res.status(500).json({
             success: false,
-            message: 'حدث خطأ أثناء حذف الصورة'
+            message: error.message === 'Artisan record not found' 
+                ? 'لم يتم العثور على حساب الحرفي' 
+                : 'حدث خطأ أثناء حذف الصورة'
         });
+    } finally {
+        connection.release();
     }
 });
 

@@ -29,7 +29,7 @@
             border-color: #3B82F6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
-ink o l        .nav-link {
+        .nav-link {
             position: relative;
             transition: all 0.3s ease;
         }
@@ -235,7 +235,7 @@ ink o l        .nav-link {
                     </div>
 
                     <!-- Gallery Section (only for artisans) -->
-                    <div class="profile-card bg-white p-6 rounded-xl shadow-sm" x-show="userData.rôle === 'artisan'">
+                    <div class="profile-card bg-white p-6 rounded-xl shadow-sm" x-show="userData.role === 'artisan'">
                         <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
                             <i class="fas fa-images text-blue-500 ml-2"></i>
                             معرض الأعمال
@@ -347,204 +347,64 @@ ink o l        .nav-link {
     <script>
         function app() {
             return {
-                loading: false,
-                message: {
-                    type: null,
-                    text: null
-                },
                 userData: {
-                    id: {{user.id}},
-                    role: "{{user.role}}",
-                    name: "{{userProfile.name}}",
-                    email: "{{userProfile.email}}",
-                    phone: "{{userProfile.phone}}",
-                    address: "{{userProfile.address}}",
-                    photo_profile: "{{userProfile.photo}}",
-                    governorate: "{{userProfile.governorate}}",
-                    city: "{{userProfile.city}}",
-                    postalCode: "{{userProfile.postal_code}}",
-                    profession: "{{artisanProfile.profession}}",
-                    experience: {{#if artisanProfile.experience}}{{artisanProfile.experience}}{{else}}0{{/if}},
-                    hourlyRate: {{#if artisanProfile.hourly_rate}}{{artisanProfile.hourly_rate}}{{else}}0{{/if}},
-                    description: "{{artisanProfile.description}}",
-                    gallery: [
-                        {{#each gallery}}
-                        {
-                            id: {{this.id}},
-                            filename: "{{this.filename}}",
-                            preview: null
-                        },
-                        {{/each}}
-                    ]
+                    role: '{{user.role}}',
+                    photo_profile: '{{user.photo_profile}}'
                 },
                 formData: {
-                    fullname: '',
-                    email: '',
-                    phone: '',
-                    address: '',
+                    email: '{{user.email}}',
+                    fullname: '{{user.name}}',
+                    phone: '{{user.telephone}}',
+                    address: '{{user.adresse}}',
+                    governorate: '{{user.gouvernorat}}',
+                    city: '{{user.city}}',
+                    postalCode: '{{user.postal_code}}',
                     currentPassword: '',
                     newPassword: '',
                     confirmPassword: '',
-                    profession: '',
+                    profession: '{{user.spécialité}}',
                     otherProfession: '',
-                    experience: '',
-                    hourlyRate: '',
-                    description: '',
-                    gallery: [],
-                    galleryToRemove: [],
-                    facebook: '',
-                    instagram: '',
-                    linkedin: '',
+                    experience: '{{user.expérience}}',
+                    hourlyRate: '{{user.tarif_horaire}}',
+                    description: '{{user.description}}',
+                    facebook: '{{user.facebook}}',
+                    instagram: '{{user.instagram}}',
+                    linkedin: '{{user.linkedin}}',
                     profilePhoto: {
-                        file: null,
-                        preview: null
-                    }
+                        preview: null,
+                        file: null
+                    },
+                    gallery: []
                 },
-                
+                loading: false,
+                message: '',
+                error: '',
+
                 async init() {
+                    if (this.userData.role === 'artisan') {
+                        await this.loadGallery();
+                    }
+                },
+
+                async loadGallery() {
                     try {
-                        const response = await fetch('/profile/data');
-                        const data = await response.json();
-                        console.log('Profile data:', data);
-                        this.userData = data;
-                        
-                        // Initialize form data with user data
-                        this.formData = {
-                            fullname: data.nom || '',
-                            email: data.email || '',
-                            phone: data.telephone || '',
-                            address: data.adresse || '',
-                            governorate: data.gouvernorat || '',
-                            city: data.ville || '',
-                            postalCode: data.code_postal || '',
-                            profession: data.spécialité || '',
-                            experience: data.expérience || '',
-                            hourlyRate: data.tarif_horaire || '',
-                            description: data.description || '',
-                            profilePhoto: {
-                                file: null,
-                                preview: null
-                            },
-                            gallery: []
-                        };
-
-                        // Load gallery if user is artisan
-                        if (data.rôle === 'artisan') {
-                            const galleryResponse = await fetch('/profile/gallery');
-                            const galleryData = await galleryResponse.json();
-                            console.log('Gallery data:', galleryData);
-                            this.formData.gallery = galleryData.map(item => ({
-                                id: item.id,
-                                image_path: item.filename,
-                                preview: null,
-                                isNew: false
-                            }));
-                        }
+                        const response = await fetch('/profile/gallery');
+                        const images = await response.json();
+                        this.formData.gallery = images;
                     } catch (error) {
-                        console.error('Error loading profile data:', error);
-                        this.message = { 
-                            type: 'error',
-                            text: 'حدث خطأ في تحميل بيانات الملف الشخصي'
-                        };
-                    }
-                },
-                
-                async uploadProfilePhoto(event) {
-                    const file = event.target.files[0];
-                    if (file) {
-                        // Create preview
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            this.formData.profilePhoto.preview = e.target.result;
-                        };
-                        reader.readAsDataURL(file);
-
-                        // Upload to server
-                        const formData = new FormData();
-                        formData.append('photo', file);
-
-                        try {
-                            const response = await fetch('/profile/upload-photo', {
-                                method: 'POST',
-                                body: formData
-                            });
-
-                            const result = await response.json();
-                            
-                            if (result.success) {
-                                this.message = {
-                                    type: 'success',
-                                    text: result.message
-                                };
-                                // Update user data with new photo path
-                                this.userData.photo_profile = result.photo_profile;
-                                
-                                // Force image refresh by adding timestamp
-                                const timestamp = new Date().getTime();
-                                const images = document.querySelectorAll('img[data-profile-image]');
-                                images.forEach(img => {
-                                    if (img.src.includes(result.photo_profile)) {
-                                        img.src = `/${result.photo_profile}?t=${timestamp}`;
-                                    }
-                                });
-                            } else {
-                                this.message = {
-                                    type: 'error',
-                                    text: result.error
-                                };
-                            }
-                        } catch (error) {
-                            console.error('Error uploading photo:', error);
-                            this.message = {
-                                type: 'error',
-                                text: 'حدث خطأ أثناء تحميل الصورة'
-                            };
-                        }
+                        console.error('Error loading gallery:', error);
+                        this.error = 'حدث خطأ في تحميل معرض الصور';
                     }
                 },
 
-                async removeProfilePhoto() {
-                    try {
-                        const response = await fetch('/profile/remove-photo', {
-                            method: 'DELETE'
-                        });
-
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            this.message = {
-                                type: 'success',
-                                text: result.message
-                            };
-                            // Clear photo data
-                            this.formData.profilePhoto = {
-                                file: null,
-                                preview: null
-                            };
-                            this.userData.photo_profile = null;
-                        } else {
-                            this.message = {
-                                type: 'error',
-                                text: result.error
-                            };
-                        }
-                    } catch (error) {
-                        console.error('Error removing photo:', error);
-                        this.message = {
-                            type: 'error',
-                            text: 'حدث خطأ أثناء حذف الصورة'
-                        };
-                    }
-                },
-                
                 async uploadGalleryImages(event) {
                     const files = event.target.files;
-                    if (!files || files.length === 0) return;
+                    if (!files.length) return;
 
                     const formData = new FormData();
-                    for (let i = 0; i < files.length; i++) {
-                        formData.append('gallery', files[i]);
-                    }
+                    Array.from(files).forEach(file => {
+                        formData.append('gallery', file);
+                    });
 
                     try {
                         const response = await fetch('/profile/gallery', {
@@ -554,28 +414,17 @@ ink o l        .nav-link {
 
                         const result = await response.json();
                         if (result.success) {
-                            // Add new images to the gallery
-                            this.formData.gallery = [
-                                ...this.formData.gallery,
-                                ...result.images
-                            ];
-                            this.message = {
-                                type: 'success',
-                                text: result.message
-                            };
+                            this.formData.gallery = [...this.formData.gallery, ...result.images];
+                            this.message = result.message;
                         } else {
-                            throw new Error(result.message);
+                            this.error = result.message;
                         }
                     } catch (error) {
                         console.error('Error uploading images:', error);
-                        this.message = {
-                            type: 'error',
-                            text: error.message || 'حدث خطأ أثناء تحميل الصور'
-                        };
+                        this.error = 'حدث خطأ في رفع الصور';
                     }
 
-                    // Clear the input
-                    event.target.value = '';
+                    event.target.value = ''; // Reset file input
                 },
 
                 async removeImage(index) {
@@ -589,163 +438,95 @@ ink o l        .nav-link {
 
                         const result = await response.json();
                         if (result.success) {
-                            // Remove the image from the gallery
                             this.formData.gallery.splice(index, 1);
-                            this.message = {
-                                type: 'success',
-                                text: result.message
-                            };
+                            this.message = result.message;
                         } else {
-                            throw new Error(result.message);
+                            this.error = result.message;
                         }
                     } catch (error) {
-                        console.error('Error deleting image:', error);
-                        this.message = {
-                            type: 'error',
-                            text: error.message || 'حدث خطأ أثناء حذف الصورة'
-                        };
+                        console.error('Error removing image:', error);
+                        this.error = 'حدث خطأ في حذف الصورة';
                     }
                 },
-                
-                async fetchProfileData() {
-                    try {
-                        // Existing profile data fetch
-                        const response = await fetch('/profile/data');
-                        const result = await response.json();
-                        
-                        // Fetch gallery images
-                        const galleryResponse = await fetch('/profile/gallery');
-                        const galleryData = await galleryResponse.json();
-                        
-                        // Add console logs to inspect gallery data
-                        console.log('Gallery Response:', galleryData);
-                        
-                        if (result) {
-                            // Update form data with fetched data
-                            this.formData = {
-                                ...this.formData,
-                                email: result.email || '',
-                                fullname: result.name || '',
-                                phone: result.phone || '',
-                                address: result.address || '',
-                                governorate: result.governorate || '',
-                                city: result.city || '',
-                                postalCode: result.postal_code || '',
-                            };
-                        
-                            // Update artisan specific data if available
-                            if (result.artisan) {
-                                this.formData = {
-                                    ...this.formData,
-                                    profession: result.artisan.spécialité || '',
-                                    experience: result.artisan.expérience || '',
-                                    hourlyRate: result.artisan.tarif_horaire || '',
-                                    description: result.artisan.description || '',
-                                };
-                            }
-                        
-                            // Update user data with the base64 photo
-                            this.userData = {
-                                ...this.userData,
-                                photo_profile: result.photo_profile, // This will now be a base64 string
-                                role: result.rôle || this.userData.role
-                            };
-                       
-                            // Update gallery mapping in fetchProfileData
-                            this.formData.gallery = galleryData.map(item => ({
-                            id: item.id,
-                            image_path: item.filename,  // Changed from filename to image_path
-                            preview: item.preview || null,
-                            isNew: false
-                            }));
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                    }
-                },
-                
-                async submitForm() {
-                    try {
-                        const formData = {
-                            fullname: this.formData.fullname,
-                            phone: this.formData.phone,
-                            address: this.formData.address,
-                            profession: this.formData.profession,
-                            experience: this.formData.experience,
-                            hourly_rate: this.formData.hourlyRate,
-                            description: this.formData.description,
-                            facebook: this.formData.facebook,
-                            instagram: this.formData.instagram,
-                            linkedin: this.formData.linkedin
-                        };
 
-                        const response = await fetch('/artisan/update-profile', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(formData)
+                uploadProfilePhoto(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    // Create preview
+                    this.formData.profilePhoto.file = file;
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        this.formData.profilePhoto.preview = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                async removeProfilePhoto() {
+                    if (!this.formData.profilePhoto.preview && !this.userData.photo_profile) return;
+
+                    try {
+                        const response = await fetch('/profile/remove-photo', {
+                            method: 'POST'
                         });
 
                         const result = await response.json();
-                        
                         if (result.success) {
-                            // Show success message
-                            this.$dispatch('show-toast', {
-                                message: result.message,
-                                type: 'success'
-                            });
-                            
-                            // Reload page after 2 seconds
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 2000);
+                            this.formData.profilePhoto.preview = null;
+                            this.formData.profilePhoto.file = null;
+                            this.userData.photo_profile = '/img/avatar-placeholder.png';
+                            this.message = result.message;
                         } else {
-                            throw new Error(result.message);
+                            this.error = result.message;
                         }
                     } catch (error) {
-                        console.error('Error:', error);
-                        this.$dispatch('show-toast', {
-                            message: error.message || 'حدث خطأ أثناء تحديث الملف الشخصي',
-                            type: 'error'
-                        });
+                        console.error('Error removing profile photo:', error);
+                        this.error = 'حدث خطأ في حذف الصورة الشخصية';
                     }
                 },
-                
-                async logout() {
+
+                async submitForm() {
+                    this.loading = true;
+                    this.error = '';
+                    this.message = '';
+
+                    const formData = new FormData();
+                    
+                    // Add form fields
+                    Object.keys(this.formData).forEach(key => {
+                        if (key !== 'profilePhoto' && key !== 'gallery') {
+                            formData.append(key, this.formData[key]);
+                        }
+                    });
+
+                    // Add profile photo if changed
+                    if (this.formData.profilePhoto.file) {
+                        formData.append('profilePhoto', this.formData.profilePhoto.file);
+                    }
+
                     try {
-                        const response = await fetch('/logout', {
+                        const response = await fetch('/profile/update-profile', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            }
+                            body: formData
                         });
-                        
-                        if (response.ok) {
-                            window.location.href = '/login';
+
+                        const result = await response.json();
+                        if (result.success) {
+                            this.message = result.message;
+                            if (result.photo_profile) {
+                                this.userData.photo_profile = result.photo_profile;
+                            }
+                        } else {
+                            this.error = result.message;
                         }
                     } catch (error) {
-                        console.error('Logout error:', error);
+                        console.error('Error updating profile:', error);
+                        this.error = 'حدث خطأ في تحديث الملف الشخصي';
                     }
-                }
-            }
-        }
 
-        function logout() {
-            fetch('/logout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+                    this.loading = false;
                 }
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.href = '/login';
-                }
-            })
-            .catch(error => {
-                console.error('Logout error:', error);
-            });
+            };
         }
     </script>
 </body>
