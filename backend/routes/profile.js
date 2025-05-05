@@ -76,33 +76,38 @@ const galleryUpload = multer({
 });
 
 // Route pour la page profile
-router.get('/', checkArtisanAuth, checkAuth, async (req, res) => {
+router.get('/', checkAuth, async (req, res) => {
     try {
-        const query = `
-            SELECT u.*, a.spécialité, a.expérience, a.localisation, a.rating, a.disponibilité, a.description, a.tarif_horaire
-            FROM utilisateurs u
-            LEFT JOIN artisans a ON u.id = a.utilisateur_id
-            WHERE u.id = ?
-        `;
-        
-        const [userData] = await db.promise().query(query, [req.session.userId]);
-        
-        if (userData[0] && userData[0].photo_profile) {
-            userData[0].photo_profile = `data:image/jpeg;base64,${userData[0].photo_profile.toString('base64')}`;
+        // Get user data from database ordered by name
+        const [userData] = await db.promise().query(
+            'SELECT id, nom, email, telephone, adresse, gouvernorat, ville, code_postal FROM utilisateurs WHERE id = ? ORDER BY nom ASC',
+            [req.session.userId]
+        );
+
+        if (!userData || userData.length === 0) {
+            return res.status(404).send('User not found');
         }
 
-        res.render('profile/index', {
+        // Send the data to the template
+        res.render('user-dashboard/profile', {
             title: 'الملف الشخصي- TN M3allim',
             user: {
                 id: req.session.userId,
                 role: req.session.userRole,
-                name: req.session.userName,
-                photo_profile: userData[0]?.photo_profile || '/img/avatar-placeholder.png'
+                name: userData[0].nom // Use the name from database
             },
-            profile: userData[0]
+            profile: {
+                nom: userData[0].nom || '',
+                email: userData[0].email || '',
+                telephone: userData[0].telephone || '',
+                adresse: userData[0].adresse || '',
+                gouvernorat: userData[0].gouvernorat || '',
+                ville: userData[0].ville || '',
+                code_postal: userData[0].code_postal || ''
+            }
         });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching profile:', error);
         res.status(500).send('Internal Server Error');
     }
 });
@@ -275,6 +280,94 @@ router.delete('/remove-photo', checkAuth, async (req, res) => {
     }
 });
 
+// Route to update profile
+router.post('/update-profile', checkAuth, async (req, res) => {
+    const userId = req.session.userId;
+    
+    try {
+        // Get form data
+        const { 
+            nom, email, telephone, adresse, 
+            gouvernorat, ville, code_postal 
+        } = req.body;
+
+        // Validate required fields
+        if (!nom || !email || !telephone) {
+            return res.status(400).json({
+                success: false,
+                error: 'الاسم والبريد الإلكتروني ورقم الهاتف مطلوبة'
+            });
+        }
+
+        // Update user data
+        const updateUserQuery = `
+            UPDATE utilisateurs 
+            SET nom = ?, 
+                email = ?,
+                telephone = ?, 
+                adresse = ?, 
+                gouvernorat = ?, 
+                ville = ?, 
+                code_postal = ?
+            WHERE id = ?
+        `;
+
+        const connection = await db.promise().getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.query(updateUserQuery, [
+                nom,
+                email,
+                telephone,
+                adresse || null,
+                gouvernorat || null,
+                ville || null,
+                code_postal || null,
+                userId
+            ]);
+
+            // Get updated user data
+            const [updatedUser] = await connection.query(
+                'SELECT * FROM utilisateurs WHERE id = ?',
+                [userId]
+            );
+
+            await connection.commit();
+
+            // Send response with updated user data
+            res.json({
+                success: true,
+                message: 'تم تحديث الملف الشخصي بنجاح',
+                user: {
+                    nom: updatedUser[0].nom,
+                    email: updatedUser[0].email,
+                    telephone: updatedUser[0].telephone,
+                    adresse: updatedUser[0].adresse || '',
+                    gouvernorat: updatedUser[0].gouvernorat || '',
+                    ville: updatedUser[0].ville || '',
+                    code_postal: updatedUser[0].code_postal || ''
+                }
+            });
+        } catch (error) {
+            await connection.rollback();
+            console.error('Error updating profile:', error);
+            res.status(500).json({
+                success: false,
+                error: 'حدث خطأ أثناء تحديث الملف الشخصي'
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in profile update:', error);
+        res.status(500).json({
+            success: false,
+            error: 'حدث خطأ في الخادم'
+        });
+    }
+});
+
 // Keep existing routes (/, /data)
 router.post('/update-profile', checkAuth, upload.fields([
     { name: 'profilePhoto', maxCount: 1 },
@@ -375,7 +468,7 @@ router.post('/update-profile', checkAuth, upload.fields([
                         }
 
                         // Get the updated user data to send back
-                        const getUserQuery = 'SELECT * FROM utilisateurs WHERE id = ?';
+                        const getUserQuery = 'SELECT * FROM utilisateurs WHERE id = ? ORDER BY nom ASC';
                         db.query(getUserQuery, [userId], (err, results) => {
                             if (err || !results.length) {
                                 return res.json({ 
