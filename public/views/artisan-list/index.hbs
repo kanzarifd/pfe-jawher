@@ -186,26 +186,34 @@
 
     <script>
         // Global functions
-        function deleteUser(userId, userName) {
-            if (confirm(`هل أنت متأكد من حذف المستخدم "${userName}"؟`)) {
-                fetch(`/admin/user/${userId}`, {
-                    method: 'DELETE'
+        window.deleteUser = function(userId, userName) {
+            if (confirm(`هل أنت متأكد من حذف ${userName}؟`)) {
+                fetch(`/admin/artisan/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => Promise.reject(err));
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         $('#artisanTable').DataTable().ajax.reload();
-                        showNotification('تم حذف المستخدم بنجاح');
+                        showNotification('تم حذف الحرفي بنجاح');
                     } else {
-                        showNotification(data.error || 'حدث خطأ أثناء حذف المستخدم', 'error');
+                        showNotification(data.error || 'حدث خطأ أثناء حذف الحرفي', 'error');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    showNotification('حدث خطأ أثناء حذف المستخدم', 'error');
+                    showNotification(error.error || 'حدث خطأ أثناء حذف الحرفي', 'error');
                 });
             }
-        }
+        };
 
         function showNotification(message, type = 'success') {
             const notif = $('<div></div>')

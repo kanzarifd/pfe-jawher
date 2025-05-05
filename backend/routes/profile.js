@@ -1,12 +1,45 @@
 const express = require('express');
 const router = express.Router();
-
+const multer = require('multer');
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
 const upload = require('../config/upload');
 const { checkAuth, checkArtisanAuth } = require('../middleware/auth');
 const path = require('path');
 const fs = require('fs');
+
+// Configure multer for file upload
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, '../public/uploads/profiles');
+        // Create directory if it doesn't exist
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+        cb(null, req.session.userId + '_' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const uploadPhoto = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+        const filetypes = /jpeg|jpg|png/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('يرجى تحميل صور بصيغة: jpg, jpeg, png فقط'));
+    }
+});
 
 // Route pour la page profile
 router.get('/', checkArtisanAuth, checkAuth, async (req, res) => {
@@ -114,6 +147,101 @@ if (!fs.existsSync(uploadDir)) {
 if (!fs.existsSync(galleryDir)) {
     fs.mkdirSync(galleryDir, { recursive: true });
 }
+
+// Route to handle profile photo upload
+router.post('/upload-photo', checkAuth, uploadPhoto.single('photo'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({
+            success: false,
+            error: 'لم يتم تحميل أي صورة'
+        });
+    }
+
+    const connection = await db.promise().getConnection();
+    
+    try {
+        await connection.beginTransaction();
+
+        // Delete old profile photo if exists
+        const [user] = await connection.query('SELECT photo_profile FROM utilisateurs WHERE id = ?', [req.session.userId]);
+        if (user[0].photo_profile) {
+            const oldPhotoPath = path.join(__dirname, '../public', user[0].photo_profile);
+            if (fs.existsSync(oldPhotoPath)) {
+                fs.unlinkSync(oldPhotoPath);
+            }
+        }
+
+        // Update database with new photo path
+        const relativePath = path.join('uploads/profiles', req.file.filename).replace(/\\/g, '/');
+        await connection.query(
+            'UPDATE utilisateurs SET photo_profile = ? WHERE id = ?',
+            [relativePath, req.session.userId]
+        );
+
+        await connection.commit();
+        res.json({ 
+            success: true, 
+            message: 'تم تحديث الصورة الشخصية بنجاح',
+            photo_profile: relativePath
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error uploading profile photo:', error);
+        // Delete uploaded file if database update fails
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء تحديث الصورة الشخصية' 
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+// Route to remove profile photo
+router.delete('/remove-photo', checkAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
+    
+    try {
+        await connection.beginTransaction();
+
+        // Get current photo path
+        const [user] = await connection.query('SELECT photo_profile FROM utilisateurs WHERE id = ?', [req.session.userId]);
+        
+        if (user[0].photo_profile) {
+            // Delete photo file
+            const photoPath = path.join(__dirname, '../public', user[0].photo_profile);
+            if (fs.existsSync(photoPath)) {
+                fs.unlinkSync(photoPath);
+            }
+
+            // Update database
+            await connection.query(
+                'UPDATE utilisateurs SET photo_profile = NULL WHERE id = ?',
+                [req.session.userId]
+            );
+        }
+
+        await connection.commit();
+        res.json({ 
+            success: true, 
+            message: 'تم حذف الصورة الشخصية بنجاح' 
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error removing profile photo:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء حذف الصورة الشخصية' 
+        });
+    } finally {
+        connection.release();
+    }
+});
 
 // Keep existing routes (/, /data)
 router.post('/update-profile', checkAuth, upload.fields([
@@ -369,7 +497,6 @@ router.post('/update-profile', checkAuth, upload.fields([
     }
 });
 
-
 router.get('/gallery', checkAuth, (req, res) => {
     const userId = req.session.userId;
     
@@ -415,4 +542,5 @@ router.get('/gallery', checkAuth, (req, res) => {
         });
     });
 });
+
 module.exports = router;

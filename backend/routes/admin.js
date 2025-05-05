@@ -254,35 +254,159 @@ router.get('/client/:id', checkAdminAuth, (req, res) => {
 
 // Delete client
 router.delete('/client/:id', checkAdminAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
+    
     try {
-        const clientId = req.params.id;
+        await connection.beginTransaction();
         
-        // First check if client exists and is a client
-        const [client] = await db.promise().query(
+        const userId = req.params.id;
+        
+        // First check if user exists and is a client
+        const [user] = await connection.query(
             'SELECT * FROM utilisateurs WHERE id = ? AND rôle = "client"',
-            [clientId]
+            [userId]
         );
 
-        if (client.length === 0) {
+        if (user.length === 0) {
+            await connection.rollback();
             return res.status(404).json({ 
                 success: false, 
-                error: 'العميل غير موجود' 
+                error: 'المستخدم غير موجود أو ليس عميلاً' 
             });
         }
 
-        // Delete related records first
-        await db.promise().query('DELETE FROM demandes WHERE client_id = ?', [clientId]);
-        
-        // Then delete the user
-        await db.promise().query('DELETE FROM utilisateurs WHERE id = ?', [clientId]);
+        // Delete all related records in the correct order
+        try {
+            // First delete reviews where user is the reviewer
+            await connection.query('DELETE FROM reviews WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No reviews table:', error.message);
+        }
 
+        try {
+            // Then delete bookings
+            await connection.query('DELETE FROM bookings WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No bookings table:', error.message);
+        }
+
+        try {
+            // Then delete demandes
+            await connection.query('DELETE FROM demandes WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No demandes table:', error.message);
+        }
+        
+        // Finally delete the user
+        await connection.query('DELETE FROM utilisateurs WHERE id = ?', [userId]);
+        
+        // Commit transaction
+        await connection.commit();
+        
         res.json({ success: true });
     } catch (error) {
+        // Rollback on error
+        await connection.rollback();
         console.error('Error deleting client:', error);
         res.status(500).json({ 
             success: false, 
             error: 'حدث خطأ أثناء حذف العميل' 
         });
+    } finally {
+        connection.release();
+    }
+});
+
+// Delete artisan
+router.delete('/artisan/:id', checkAdminAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
+    
+    try {
+        await connection.beginTransaction();
+        
+        const userId = req.params.id;
+        
+        // First check if user exists and is an artisan
+        const [user] = await connection.query(
+            'SELECT * FROM utilisateurs WHERE id = ? AND rôle = "artisan"',
+            [userId]
+        );
+
+        if (user.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                error: 'المستخدم غير موجود أو ليس حرفياً' 
+            });
+        }
+
+        // Get artisan ID
+        const [artisan] = await connection.query(
+            'SELECT id FROM artisans WHERE utilisateur_id = ?',
+            [userId]
+        );
+
+        if (artisan.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                error: 'لم يتم العثور على سجل الحرفي' 
+            });
+        }
+
+        const artisanId = artisan[0].id;
+
+        // Delete all related records in the correct order
+        try {
+            // First delete bookings
+            await connection.query('DELETE FROM bookings WHERE artisan_id = ?', [artisanId]);
+        } catch (error) {
+            console.log('No bookings or error:', error.message);
+        }
+
+        try {
+            // Then delete reviews
+            await connection.query('DELETE FROM reviews WHERE artisan_id = ?', [artisanId]);
+        } catch (error) {
+            console.log('No reviews or error:', error.message);
+        }
+
+        try {
+            // Then delete demandes
+            await connection.query('DELETE FROM demandes WHERE artisan_id = ?', [artisanId]);
+        } catch (error) {
+            console.log('No demandes or error:', error.message);
+        }
+
+        // Delete artisan record
+        await connection.query('DELETE FROM artisans WHERE id = ?', [artisanId]);
+        
+        // Finally delete the user
+        await connection.query('DELETE FROM utilisateurs WHERE id = ?', [userId]);
+        
+        // Commit transaction
+        await connection.commit();
+        
+        res.json({ success: true });
+    } catch (error) {
+        // Rollback on error
+        await connection.rollback();
+        console.error('Error deleting artisan:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'حدث خطأ أثناء حذف الحرفي' 
+        });
+    } finally {
+        connection.release();
     }
 });
 
@@ -355,77 +479,60 @@ router.get('/dashboard-data', checkAdminAuth, (req, res) => {
 });
 
 // Get users data for DataTables
-router.get('/users-data', checkAdminAuth, (req, res) => {
-    const role = req.query.role;
-    console.log('Requested role:', role); // Debug log
+router.get('/users-data', checkAdminAuth, async (req, res) => {
+    try {
+        const role = req.query.role;
+        console.log('Requested role:', role);
 
-    if (role === 'artisan') {
-        const query = `
-            SELECT 
-                u.id, 
-                u.nom, 
-                u.email, 
-                u.gouvernorat,
-                u.telephone,
-                COALESCE(
-                    (
-                        SELECT AVG(r.rating)
-                        FROM reviews r
-                        JOIN artisans a ON r.artisan_id = a.id
-                        JOIN utilisateurs u2 ON a.utilisateur_id = u2.id
-                        WHERE u2.rôle = 'artisan'
-                    ),
-                    0
-                ) as rating
-            FROM utilisateurs u
-            LEFT JOIN reviews r ON u.id = r.artisan_id
-            WHERE u.rôle = 'artisan'
-            GROUP BY u.id, u.nom, u.email, u.gouvernorat, u.telephone
-            ORDER BY u.id DESC
-        `;
+        let query;
+        if (role === 'artisan') {
+            query = `
+                SELECT 
+                    u.id, 
+                    u.nom, 
+                    u.email, 
+                    u.gouvernorat,
+                    u.telephone,
+                    COALESCE(
+                        (
+                            SELECT AVG(r.rating)
+                            FROM reviews r
+                            JOIN artisans a ON r.artisan_id = a.id
+                            JOIN utilisateurs u2 ON a.utilisateur_id = u2.id
+                            WHERE u2.rôle = 'artisan'
+                        ),
+                        0
+                    ) as rating
+                FROM utilisateurs u
+                LEFT JOIN reviews r ON u.id = r.artisan_id
+                WHERE u.rôle = 'artisan'
+                GROUP BY u.id, u.nom, u.email, u.gouvernorat, u.telephone
+                ORDER BY u.id DESC
+            `;
+        } else {
+            query = `
+                SELECT id, nom, email, telephone, gouvernorat
+                FROM utilisateurs
+                WHERE rôle = ?
+                ORDER BY id DESC
+            `;
+        }
 
-        db.query(query, (err, results) => {
-            if (err) {
-                console.error('Error fetching artisans:', err);
-                return res.status(500).json({ error: 'Error fetching artisans' });
-            }
-            
-            res.json(results);
+        const [users] = await db.promise().query(query, [role]);
+        console.log('Users results:', users);
+        
+        res.json({
+            data: users,
+            recordsTotal: users.length,
+            recordsFiltered: users.length
         });
-    } else if (role === 'client') {
-        const query = `
-            SELECT id, nom, email, telephone, gouvernorat
-            FROM utilisateurs
-            WHERE rôle = 'client'
-            ORDER BY id DESC
-        `;
-        db.query(query, (err, results) => {
-            if (err) {
-                console.error('Error fetching clients:', err);
-                return res.status(500).json({ error: 'Error fetching clients' });
-            }       
-            console.log('Clients results:', results); // Debug log
-            res.json(results);      
-
-        })
-    }
-    
-    
-    else {
-        const query = `
-            SELECT id, nom, email, telephone, gouvernorat
-            FROM utilisateurs 
-            WHERE rôle = 'client'
-            ORDER BY id DESC
-        `;
-
-        db.query(query, [role], (err, results) => {
-            if (err) {
-                console.error('Error fetching users:', err);
-                return res.status(500).json({ error: 'Error fetching users' });
-            }
-            console.log('Users results:', results); // Debug log
-            res.json(results);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ 
+            error: 'حدث خطأ أثناء جلب بيانات المستخدمين',
+            data: [],
+            recordsTotal: 0,
+            recordsFiltered: 0
         });
     }
 });
@@ -890,35 +997,75 @@ router.get('/client-list/data', checkAdminAuth, async (req, res) => {
 
 // Delete client
 router.delete('/client/:id', checkAdminAuth, async (req, res) => {
+    const connection = await db.promise().getConnection();
+    
     try {
-        const clientId = req.params.id;
+        await connection.beginTransaction();
+        
+        const userId = req.params.id;
         
         // First check if client exists and is a client
-        const [client] = await db.promise().query(
+        const [user] = await connection.query(
             'SELECT * FROM utilisateurs WHERE id = ? AND rôle = "client"',
-            [clientId]
+            [userId]
         );
 
-        if (client.length === 0) {
+        if (user.length === 0) {
+            await connection.rollback();
             return res.status(404).json({ 
                 success: false, 
-                error: 'العميل غير موجود' 
+                error: 'المستخدم غير موجود أو ليس عميلاً' 
             });
         }
 
-        // Delete related records first
-        await db.promise().query('DELETE FROM demandes WHERE client_id = ?', [clientId]);
-        
-        // Then delete the user
-        await db.promise().query('DELETE FROM utilisateurs WHERE id = ?', [clientId]);
+        // Delete all related records in the correct order
+        try {
+            // First delete reviews where user is the reviewer
+            await connection.query('DELETE FROM reviews WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No reviews table:', error.message);
+        }
 
+        try {
+            // Then delete bookings
+            await connection.query('DELETE FROM bookings WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No bookings table:', error.message);
+        }
+
+        try {
+            // Then delete demandes
+            await connection.query('DELETE FROM demandes WHERE user_id = ?', [userId]);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                throw error;
+            }
+            console.log('No demandes table:', error.message);
+        }
+        
+        // Finally delete the user
+        await connection.query('DELETE FROM utilisateurs WHERE id = ?', [userId]);
+        
+        // Commit transaction
+        await connection.commit();
+        
         res.json({ success: true });
     } catch (error) {
+        // Rollback on error
+        await connection.rollback();
         console.error('Error deleting client:', error);
         res.status(500).json({ 
             success: false, 
             error: 'حدث خطأ أثناء حذف العميل' 
         });
+    } finally {
+        connection.release();
     }
 });
 
@@ -940,7 +1087,7 @@ router.get('/client-list/data', checkAdminAuth, async (req, res) => {
                 (
                     SELECT COUNT(*)
                     FROM demandes d
-                    WHERE d.client_id = u.id
+                    WHERE d.user_id = u.id
                 ) as total_requests
             FROM utilisateurs u
             WHERE u.rôle = 'client'
@@ -1096,35 +1243,38 @@ router.delete('/user/:id', checkAdminAuth, async (req, res) => {
             if (artisan.length > 0) {
                 const artisanId = artisan[0].id;
                 
+                // Delete bookings first
+                try {
+                    await connection.query('DELETE FROM bookings WHERE artisan_id = ?', [artisanId]);
+                } catch (error) {
+                    console.log('No bookings table or error:', error.message);
+                }
+                
                 // Delete reviews if table exists
                 try {
                     await connection.query('DELETE FROM reviews WHERE artisan_id = ?', [artisanId]);
                 } catch (error) {
-                    if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+                    console.log('No reviews table or error:', error.message);
                 }
                 
                 // Delete requests if table exists
                 try {
                     await connection.query('DELETE FROM demandes WHERE artisan_id = ?', [artisanId]);
                 } catch (error) {
-                    if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+                    console.log('No demandes table or error:', error.message);
                 }
                 
-                // Delete artisan record
+                // Delete artisan record last
                 await connection.query('DELETE FROM artisans WHERE id = ?', [artisanId]);
             }
         } else if (user[0].rôle === 'client') {
-            // Delete client-related records if tables exist
+            // For clients, just delete their user record
+            // Any foreign key constraints should be set to ON DELETE CASCADE
+            // or the related records should be deleted first if needed
             try {
-                await connection.query('DELETE FROM demandes WHERE client_id = ?', [userId]);
+                await connection.query('DELETE FROM demandes WHERE user_id = ?', [userId]);
             } catch (error) {
-                if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
-            }
-            
-            try {
-                await connection.query('DELETE FROM reviews WHERE user_id = ?', [userId]);
-            } catch (error) {
-                if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+                console.log('No demandes table or error:', error.message);
             }
         }
         
@@ -1145,6 +1295,78 @@ router.delete('/user/:id', checkAdminAuth, async (req, res) => {
         });
     } finally {
         connection.release();
+    }
+});
+
+// Add new user
+router.post('/user', checkAdminAuth, async (req, res) => {
+    try {
+        const { nom, email, telephone, gouvernorat, rôle } = req.body;
+
+        // Validate required fields
+        if (!nom || !email || !telephone || !gouvernorat || !rôle) {
+            return res.status(400).json({
+                success: false,
+                error: 'جميع الحقول مطلوبة'
+            });
+        }
+
+        // Check if email already exists
+        const [existingUser] = await db.promise().query(
+            'SELECT * FROM utilisateurs WHERE email = ?',
+            [email]
+        );
+
+        if (existingUser.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'البريد الإلكتروني مستخدم بالفعل'
+            });
+        }
+
+        // Generate a random password
+        const password = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Start transaction
+        const connection = await db.promise().getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Insert user
+            const [result] = await connection.query(
+                'INSERT INTO utilisateurs (nom, email, password, telephone, gouvernorat, rôle) VALUES (?, ?, ?, ?, ?, ?)',
+                [nom, email, hashedPassword, telephone, gouvernorat, rôle]
+            );
+
+            if (rôle === 'artisan') {
+                // Create artisan record
+                await connection.query(
+                    'INSERT INTO artisans (utilisateur_id) VALUES (?)',
+                    [result.insertId]
+                );
+            }
+
+            await connection.commit();
+
+            // Send success response with the generated password
+            res.json({
+                success: true,
+                message: 'تمت إضافة المستخدم بنجاح',
+                password: password // This will be shown to admin to share with user
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error adding user:', error);
+        res.status(500).json({
+            success: false,
+            error: 'حدث خطأ أثناء إضافة المستخدم'
+        });
     }
 });
 

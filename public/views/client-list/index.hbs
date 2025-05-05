@@ -96,10 +96,6 @@
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الرقم</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الاسم</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">البريد الإلكتروني</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">رقم الهاتف</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">العنوان</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">المحافظة</th>
-                                <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الجنس</th>
                                 <th class="px-6 py-4 text-right text-sm font-semibold text-slate-600">الإجراءات</th>
                             </tr>
                         </thead>
@@ -146,26 +142,26 @@
 
     <!-- All Users Modal -->
     <div id="allUsersModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
-      <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl max-h-[80vh] overflow-auto">
-        <h3 class="text-xl font-semibold mb-4">جميع المستخدمين</h3>
-        <table class="min-w-full border text-sm">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="py-2 px-3 border">الاسم</th>
-              <th class="py-2 px-3 border">البريد الإلكتروني</th>
-              <th class="py-2 px-3 border">الدور</th>
-              <th class="py-2 px-3 border">الحالة</th>
-              <th class="py-2 px-3 border">تاريخ الإنشاء</th>
-            </tr>
-          </thead>
-          <tbody id="allUsersTableBody">
-            <tr><td colspan="5" class="text-center py-4">جاري التحميل...</td></tr>
-          </tbody>
-        </table>
-        <div class="flex justify-end mt-4">
-          <button id="closeAllUsersModal" class="px-4 py-2 rounded bg-gray-300">إغلاق</button>
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl max-h-[80vh] overflow-auto">
+            <h3 class="text-xl font-semibold mb-4">جميع المستخدمين</h3>
+            <table class="min-w-full border text-sm">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="py-2 px-3 border">الاسم</th>
+                        <th class="py-2 px-3 border">البريد الإلكتروني</th>
+                        <th class="py-2 px-3 border">الدور</th>
+                        <th class="py-2 px-3 border">الحالة</th>
+                        <th class="py-2 px-3 border">تاريخ الإنشاء</th>
+                    </tr>
+                </thead>
+                <tbody id="allUsersTableBody">
+                    <tr><td colspan="5" class="text-center py-4">جاري التحميل...</td></tr>
+                </tbody>
+            </table>
+            <div class="flex justify-end mt-4">
+                <button id="closeAllUsersModal" class="px-4 py-2 rounded bg-gray-300">إغلاق</button>
+            </div>
         </div>
-      </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -190,87 +186,31 @@
 
             var table = $('#clientTable').DataTable({
                 language: {
-                    "sProcessing": "جارٍ التحميل...",
-                    "sLengthMenu": "أظهر _MENU_ مدخلات",
-                    "sZeroRecords": "لم يعثر على أية سجلات",
-                    "sInfo": "إظهار _START_ إلى _END_ من أصل _TOTAL_ مدخل",
-                    "sInfoEmpty": "يعرض 0 إلى 0 من أصل 0 سجل",
-                    "sInfoFiltered": "(منتقاة من مجموع _MAX_ مُدخل)",
-                    "sInfoPostFix": "",
-                    "sSearch": "ابحث:",
-                    "sUrl": "",
-                    "oPaginate": {
-                        "sFirst": "الأول",
-                        "sPrevious": "السابق",
-                        "sNext": "التالي",
-                        "sLast": "الأخير"
-                    }
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
                 },
                 ajax: {
-                    url: "/admin/client-list/data",
-                    dataSrc: ''
+                    url: "/admin/users-data",
+                    data: function(d) {
+                        d.role = 'client';
+                    }
                 },
                 columns: [
                     { 
                         data: null,
                         render: function(data, type, row, meta) {
-                            return `<span class="font-semibold text-slate-600">${meta.row + 1}</span>`;
+                            return meta.row + 1;
                         }
                     },
                     { 
                         data: "nom",
                         render: function(data, type, row) {
-                            return `<div class="font-medium text-slate-800">${data || ''}</div>`;
+                            return `<div class="text-slate-700 font-medium">${data}</div>`;
                         }
                     },
                     { 
                         data: "email",
                         render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || ''}</div>`;
-                        }
-                    },
-                    { 
-                        data: "telephone",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                        }
-                    },
-                    { 
-                        data: "adresse",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                        }
-                    },
-                    { 
-                        data: "gouvernorat",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                        }
-                    },
-                    { 
-                        data: "sexe",
-                        render: function(data, type, row) {
-                            const gender = data === 'M' ? 'ذكر' : data === 'F' ? 'أنثى' : 'غير محدد';
-                            const color = data === 'M' ? 'blue' : data === 'F' ? 'pink' : 'gray';
-                            return `<div class="text-${color}-600">${gender}</div>`;
-                        }
-                    },
-                    { 
-                        data: "age",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير متوفر'} سنة</div>`;
-                        }
-                    },
-                    { 
-                        data: "date_inscription",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || 'غير متوفر'}</div>`;
-                        }
-                    },
-                    { 
-                        data: "total_requests",
-                        render: function(data, type, row) {
-                            return `<div class="text-slate-600">${data || '0'} طلب</div>`;
+                            return `<div class="text-slate-600">${data}</div>`;
                         }
                     },
                     {
@@ -282,7 +222,7 @@
                                         class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-md transition-colors duration-200">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button onclick="deleteClient('${row.id}')" 
+                                    <button onclick="deleteUser('${row.id}', '${row.nom}')" 
                                         class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1 rounded-md transition-colors duration-200">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -291,8 +231,9 @@
                         }
                     }
                 ],
-                order: [[8, 'desc']], // Sort by registration date by default
-                pageLength: 10
+                order: [[0, 'asc']],
+                pageLength: 10,
+                responsive: true
             });
 
             function updateTotalUsersFromTable() {
@@ -385,28 +326,34 @@
             });
 
             // Make deleteUser globally available
-            window.deleteUser = function(userId) {
-                // The fix for the delete function is not in this file, but in the backend route. No changes needed here for the SQL error.
-                if (confirm('هل أنت متأكد أنك تريد حذف هذا المستخدم؟')) {
-                    $.ajax({
-                      url: '/admin/client/' + userId + '/delete',
-                      method: 'POST',
-                      success: function(res) {
-                        if (res.success) {
-                          $('#clientTable').DataTable().ajax.reload();
-                          if (typeof showNotification === 'function') {
-                            showNotification('تم حذف المستخدم بنجاح!');
-                          }
-                        } else {
-                          alert(res.error || 'حدث خطأ أثناء الحذف');
+            window.deleteUser = function(userId, userName) {
+                if (confirm(`هل أنت متأكد من حذف ${userName}؟`)) {
+                    fetch(`/admin/client/${userId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
                         }
-                      },
-                      error: function(xhr) {
-                        alert('حدث خطأ أثناء الحذف');
-                      }
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => Promise.reject(err));
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            $('#clientTable').DataTable().ajax.reload();
+                            showNotification('تم حذف العميل بنجاح');
+                        } else {
+                            showNotification(data.error || 'حدث خطأ أثناء حذف العميل', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showNotification(error.error || 'حدث خطأ أثناء حذف العميل', 'error');
                     });
                 }
-            }
+            };
 
             // View client details
             function viewClient(clientId) {
@@ -481,9 +428,9 @@
             }
 
             // Notification function
-            function showNotification(message) {
+            function showNotification(message, type = 'success') {
                 let notif = $('<div></div>')
-                  .addClass('fixed top-5 right-5 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce')
+                  .addClass('fixed top-5 right-5 bg-' + (type === 'success' ? 'green' : 'red') + '-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce')
                   .text(message)
                   .hide();
                 $('body').append(notif);

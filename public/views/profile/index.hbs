@@ -76,8 +76,9 @@ ink o l        .nav-link {
                         <div class="flex flex-col items-center">
                             <div class="relative group">
                                 <!-- Update the img src attribute in the profile photo section -->
-                                <img :src="formData.profilePhoto.preview || userData.photo_profile || '/img/avatar-placeholder.png'" 
+                                <img :src="formData.profilePhoto.preview || userData.photo_profile || '/img/default-avatar.png'" 
                                      class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover cursor-pointer"
+                                     data-profile-image
                                      @click="document.getElementById('profilePhotoInput').click()">
                                 
                                 <div class="absolute inset-0 bg-black/30 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -341,7 +342,10 @@ ink o l        .nav-link {
         function app() {
             return {
                 loading: false,
-                message: null,
+                message: {
+                    type: null,
+                    text: null
+                },
                 userData: {
                     id: {{user.id}},
                     role: "{{user.role}}",
@@ -431,27 +435,92 @@ ink o l        .nav-link {
                     }
                 },
                 
-                uploadProfilePhoto(event) {
+                async uploadProfilePhoto(event) {
                     const file = event.target.files[0];
                     if (file) {
-                        this.formData.profilePhoto.file = file;
-                        this.formData.profilePhoto.remove = false;
-                        
-                        // Create preview URL
+                        // Create preview
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             this.formData.profilePhoto.preview = e.target.result;
                         };
                         reader.readAsDataURL(file);
+
+                        // Upload to server
+                        const formData = new FormData();
+                        formData.append('photo', file);
+
+                        try {
+                            const response = await fetch('/profile/upload-photo', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            const result = await response.json();
+                            
+                            if (result.success) {
+                                this.message = {
+                                    type: 'success',
+                                    text: result.message
+                                };
+                                // Update user data with new photo path
+                                this.userData.photo_profile = result.photo_profile;
+                                
+                                // Force image refresh by adding timestamp
+                                const timestamp = new Date().getTime();
+                                const images = document.querySelectorAll('img[data-profile-image]');
+                                images.forEach(img => {
+                                    if (img.src.includes(result.photo_profile)) {
+                                        img.src = `/${result.photo_profile}?t=${timestamp}`;
+                                    }
+                                });
+                            } else {
+                                this.message = {
+                                    type: 'error',
+                                    text: result.error
+                                };
+                            }
+                        } catch (error) {
+                            console.error('Error uploading photo:', error);
+                            this.message = {
+                                type: 'error',
+                                text: 'حدث خطأ أثناء تحميل الصورة'
+                            };
+                        }
                     }
                 },
-                
-                removeProfilePhoto() {
-                    this.formData.profilePhoto = {
-                        file: null,
-                        preview: null,
-                        remove: true
-                    };
+
+                async removeProfilePhoto() {
+                    try {
+                        const response = await fetch('/profile/remove-photo', {
+                            method: 'DELETE'
+                        });
+
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            this.message = {
+                                type: 'success',
+                                text: result.message
+                            };
+                            // Clear photo data
+                            this.formData.profilePhoto = {
+                                file: null,
+                                preview: null
+                            };
+                            this.userData.photo_profile = null;
+                        } else {
+                            this.message = {
+                                type: 'error',
+                                text: result.error
+                            };
+                        }
+                    } catch (error) {
+                        console.error('Error removing photo:', error);
+                        this.message = {
+                            type: 'error',
+                            text: 'حدث خطأ أثناء حذف الصورة'
+                        };
+                    }
                 },
                 
                 uploadGalleryImages(event) {
@@ -490,10 +559,10 @@ ink o l        .nav-link {
                         
                         // Fetch gallery images
                         const galleryResponse = await fetch('/profile/gallery');
-                        const galleryResult = await galleryResponse.json();
+                        const galleryData = await galleryResponse.json();
                         
                         // Add console logs to inspect gallery data
-                        console.log('Gallery Response:', galleryResult);
+                        console.log('Gallery Response:', galleryData);
                         
                         if (result) {
                             // Update form data with fetched data
@@ -527,7 +596,7 @@ ink o l        .nav-link {
                             };
                        
                             // Update gallery mapping in fetchProfileData
-                            this.formData.gallery = galleryResult.map(item => ({
+                            this.formData.gallery = galleryData.map(item => ({
                             id: item.id,
                             image_path: item.filename,  // Changed from filename to image_path
                             preview: item.preview || null,
