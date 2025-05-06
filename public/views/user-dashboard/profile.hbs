@@ -43,7 +43,7 @@
                     <div class="flex flex-col items-center space-y-4">
                         <!-- Profile Image -->
                         <div class="relative">
-                            <img :src="photoPreview || (user.photo_profile ? '/' + user.photo_profile : '/img/default-avatar.png')"
+                            <img :src="photoPreview || (user.img ? '/uploads/profiles/' + user.img : '/img/default-avatar.png')"
                                  class="w-32 h-32 rounded-full object-cover border-4 border-white shadow"
                                  id="profile-image">
                             <button type="button"
@@ -183,26 +183,26 @@
         function profileData() {
             return {
                 loading: false,
-                message: null,
                 photoPreview: null,
+                message: null,
                 user: {
-                    photo_profile: '{{ user.photo_profile }}',
-                    nom: '{{ user.nom }}',
-                    email: '{{ user.email }}',
-                    telephone: '{{ user.telephone }}',
-                    adresse: '{{ user.adresse }}',
-                    gouvernorat: '{{ user.gouvernorat }}',
-                    ville: '{{ user.ville }}',
-                    code_postal: '{{ user.code_postal }}'
+                    img: '{{user.img}}',
+                    nom: '{{user.nom}}',
+                    email: '{{user.email}}',
+                    telephone: '{{user.telephone}}',
+                    adresse: '{{user.adresse}}',
+                    gouvernorat: '{{user.gouvernorat}}',
+                    ville: '{{user.ville}}',
+                    code_postal: '{{user.code_postal}}'
                 },
                 form: {
-                    nom: '{{ user.nom }}',
-                    email: '{{ user.email }}',
-                    telephone: '{{ user.telephone }}',
-                    adresse: '{{ user.adresse }}',
-                    gouvernorat: '{{ user.gouvernorat }}',
-                    ville: '{{ user.ville }}',
-                    code_postal: '{{ user.code_postal }}',
+                    nom: '{{user.nom}}',
+                    email: '{{user.email}}',
+                    telephone: '{{user.telephone}}',
+                    adresse: '{{user.adresse}}',
+                    gouvernorat: '{{user.gouvernorat}}',
+                    ville: '{{user.ville}}',
+                    code_postal: '{{user.code_postal}}',
                     photo: null
                 },
 
@@ -260,10 +260,7 @@
                     try {
                         const response = await fetch('/profile/update-profile', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(Object.fromEntries(formData))
+                            body: formData
                         });
 
                         const result = await response.json();
@@ -277,6 +274,14 @@
                             // Update form with returned data
                             if (result.user) {
                                 Object.assign(this.form, result.user);
+                                Object.assign(this.user, result.user);
+                            }
+
+                            // Reset photo preview
+                            this.photoPreview = null;
+                            this.form.photo = null;
+                            if (this.$refs.photo) {
+                                this.$refs.photo.value = '';
                             }
 
                             // Reload page after success message
@@ -290,7 +295,7 @@
                             };
                         }
                     } catch (error) {
-                        console.error('Error updating profile:', error);
+                        console.error('Error:', error);
                         this.message = {
                             type: 'error',
                             text: 'حدث خطأ في الاتصال بالخادم'
@@ -299,7 +304,7 @@
                         this.loading = false;
                     }
                 }
-            }
+            };
         }
     </script>
 </body>

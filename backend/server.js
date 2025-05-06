@@ -103,6 +103,7 @@ app.use('/', artisanRoutes);
 app.use('/', profileRoutes);
 // Serve static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/uploads/profiles', express.static(path.join(__dirname, '..', 'public', 'uploads', 'profiles')));
 
 // Remove the duplicate export and server start
 // module.exports = app;

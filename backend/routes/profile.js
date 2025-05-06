@@ -1,86 +1,105 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const bcrypt = require('bcrypt');
-const db = require('../config/database');
-const upload = require('../config/upload');
-const { checkAuth, checkArtisanAuth } = require('../middleware/auth');
 const path = require('path');
 const fs = require('fs');
+const { checkAuth, checkArtisanAuth } = require('../middleware/auth');
+const db = require('../config/database');
+const upload = require('../config/upload');
 
-// Configure multer for file upload
+// Configure multer for profile photo uploads
+const uploadDir = path.join(__dirname, '../public/uploads/profiles');
+const galleryDir = path.join(__dirname, '../public/uploads/gallery');
+
+// Ensure upload directories exist
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(galleryDir)) {
+    fs.mkdirSync(galleryDir, { recursive: true });
+}
+
+// Serve static files from the uploads directory
+router.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+
+// Configure multer storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, '../public/uploads/profiles');
-        // Create directory if it doesn't exist
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
-        cb(null, req.session.userId + '_' + uniqueSuffix + path.extname(file.originalname));
+        cb(null, Date.now() + '_' + file.originalname);
     }
 });
 
 const uploadPhoto = multer({
     storage: storage,
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
-    },
-    fileFilter: function (req, file, cb) {
-        const filetypes = /jpeg|jpg|png/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('يرجى تحميل صور بصيغة: jpg, jpeg, png فقط'));
-    }
+    limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 // Configure multer for gallery uploads
-const galleryDir = path.join(__dirname, '..', 'public', 'uploads', 'gallery');
-
 const galleryStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-        if (!fs.existsSync(galleryDir)) {
-            fs.mkdirSync(galleryDir, { recursive: true });
-        }
         cb(null, galleryDir);
     },
     filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
-        const filename = req.session.userId + '_' + uniqueSuffix + path.extname(file.originalname);
-        cb(null, filename);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 
 const galleryUpload = multer({
     storage: galleryStorage,
     limits: {
-        fileSize: 10 * 1024 * 1024 // 5MB limit
+        fileSize: 10 * 1024 * 1024 // 10MB limit
     },
     fileFilter: function (req, file, cb) {
-        const filetypes = /jpeg|jpg|png/;
+        const filetypes = /jpeg|jpg|png|gif/;
         const mimetype = filetypes.test(file.mimetype);
         const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
 
         if (mimetype && extname) {
             return cb(null, true);
         }
-        cb(new Error('يرجى تحميل صور بصيغة: jpg, jpeg, png فقط'));
+        cb(new Error('Only image files are allowed!'));
     }
 });
+
+// Function to handle profile image upload
+async function handleProfileImageUpload(req, userId, connection) {
+    let photoPath = null;
+    if (req.file) {
+        // Delete old profile photo if exists
+        const [user] = await connection.query(
+            'SELECT img FROM utilisateurs WHERE id = ?', 
+            [userId]
+        );
+        
+        if (user[0].img) {
+            const oldPhotoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
+            if (fs.existsSync(oldPhotoPath)) {
+                fs.unlinkSync(oldPhotoPath);
+            }
+        }
+        
+        // Set new photo path using req.file.filename
+        photoPath = req.file.filename;
+
+        // Update database with new photo path
+        await connection.query(
+            'UPDATE utilisateurs SET img = ? WHERE id = ?',
+            [photoPath, userId]
+        );
+    }
+    return photoPath;
+}
 
 // Route pour la page profile
 router.get('/', checkAuth, async (req, res) => {
     try {
         // Get user data from database ordered by name
         const [userData] = await db.promise().query(
-            'SELECT id, nom, email, telephone, adresse, gouvernorat, ville, code_postal FROM utilisateurs WHERE id = ? ORDER BY nom ASC',
+            'SELECT id, nom, email, telephone, adresse, gouvernorat, ville, code_postal, `utilisateurs`.`img` FROM utilisateurs WHERE id = ? ORDER BY nom ASC',
             [req.session.userId]
         );
 
@@ -88,13 +107,16 @@ router.get('/', checkAuth, async (req, res) => {
             return res.status(404).send('User not found');
         }
 
+        console.log('User Data:', userData[0]); // Debug log
+
         // Send the data to the template
         res.render('user-dashboard/profile', {
             title: 'الملف الشخصي- TN M3allim',
             user: {
                 id: req.session.userId,
                 role: req.session.userRole,
-                name: userData[0].nom // Use the name from database
+                name: userData[0].nom,
+                img: userData[0].img || null
             },
             profile: {
                 nom: userData[0].nom || '',
@@ -103,7 +125,8 @@ router.get('/', checkAuth, async (req, res) => {
                 adresse: userData[0].adresse || '',
                 gouvernorat: userData[0].gouvernorat || '',
                 ville: userData[0].ville || '',
-                code_postal: userData[0].code_postal || ''
+                code_postal: userData[0].code_postal || '',
+                img: userData[0].img || ''
             }
         });
     } catch (error) {
@@ -174,19 +197,97 @@ router.get('/data', checkAuth, (req, res) => {
     });
 });
 
-// Create directories (move this near the top with other initialization code)
-// Add this after the imports
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'profiles');
+// Update profile route
+router.post('/update-profile', checkAuth, uploadPhoto.single('profilePhoto'), async (req, res) => {
+    const userId = req.session.userId;
+    const connection = await db.promise().getConnection();
+    try {
+        await connection.beginTransaction();
 
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-if (!fs.existsSync(galleryDir)) {
-    fs.mkdirSync(galleryDir, { recursive: true });
-}
+        // Get form data
+        const { 
+            nom, email, telephone, adresse, 
+            gouvernorat, ville, code_postal 
+        } = req.body;
+
+        // Validate required fields
+        if (!nom || !email || !telephone) {
+            return res.status(400).json({
+                success: false,
+                error: 'الاسم والبريد الإلكتروني ورقم الهاتف مطلوبة'
+            });
+        }
+
+        // Handle profile photo if uploaded
+        const photoPath = await handleProfileImageUpload(req, userId, connection);
+
+        // Update user data
+        const updateUserQuery = `
+            UPDATE utilisateurs 
+            SET nom = ?, 
+                email = ?,
+                telephone = ?, 
+                adresse = ?, 
+                gouvernorat = ?, 
+                ville = ?, 
+                code_postal = ?
+            WHERE id = ?
+        `;
+
+        const queryParams = [
+            nom,
+            email,
+            telephone,
+            adresse || null,
+            gouvernorat || null,
+            ville || null,
+            code_postal || null,
+            userId
+        ];
+
+        await connection.query(updateUserQuery, queryParams);
+
+        // Get updated user data
+        const [updatedUser] = await connection.query(
+            'SELECT * FROM utilisateurs WHERE id = ?',
+            [userId]
+        );
+
+        await connection.commit();
+
+        // Send response with updated user data
+        res.json({
+            success: true,
+            message: 'تم تحديث الملف الشخصي بنجاح',
+            user: {
+                nom: updatedUser[0].nom,
+                email: updatedUser[0].email,
+                telephone: updatedUser[0].telephone,
+                adresse: updatedUser[0].adresse || '',
+                gouvernorat: updatedUser[0].gouvernorat || '',
+                ville: updatedUser[0].ville || '',
+                code_postal: updatedUser[0].code_postal || '',
+                img: updatedUser[0].img || ''
+            }
+        });
+    } catch (error) {
+        await connection.rollback();
+        // Delete uploaded file if database update fails
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        console.error('Error updating profile:', error);
+        res.status(500).json({
+            success: false,
+            error: 'حدث خطأ أثناء تحديث الملف الشخصي'
+        });
+    } finally {
+        connection.release();
+    }
+});
 
 // Route to handle profile photo upload
-router.post('/upload-photo', checkAuth, uploadPhoto.single('photo'), async (req, res) => {
+router.post('/upload-photo', checkAuth, uploadPhoto.single('profilePhoto'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({
             success: false,
@@ -200,18 +301,18 @@ router.post('/upload-photo', checkAuth, uploadPhoto.single('photo'), async (req,
         await connection.beginTransaction();
 
         // Delete old profile photo if exists
-        const [user] = await connection.query('SELECT photo_profile FROM utilisateurs WHERE id = ?', [req.session.userId]);
-        if (user[0].photo_profile) {
-            const oldPhotoPath = path.join(__dirname, '../public', user[0].photo_profile);
+        const [user] = await connection.query('SELECT img FROM utilisateurs WHERE id = ?', [req.session.userId]);
+        if (user[0].img) {
+            const oldPhotoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
             if (fs.existsSync(oldPhotoPath)) {
                 fs.unlinkSync(oldPhotoPath);
             }
         }
 
         // Update database with new photo path
-        const relativePath = path.join('uploads/profiles', req.file.filename).replace(/\\/g, '/');
+        const relativePath = req.file.filename;
         await connection.query(
-            'UPDATE utilisateurs SET photo_profile = ? WHERE id = ?',
+            'UPDATE utilisateurs SET img = ? WHERE id = ?',
             [relativePath, req.session.userId]
         );
 
@@ -226,7 +327,7 @@ router.post('/upload-photo', checkAuth, uploadPhoto.single('photo'), async (req,
         await connection.rollback();
         console.error('Error uploading profile photo:', error);
         // Delete uploaded file if database update fails
-        if (req.file) {
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
         res.status(500).json({ 
@@ -246,18 +347,18 @@ router.delete('/remove-photo', checkAuth, async (req, res) => {
         await connection.beginTransaction();
 
         // Get current photo path
-        const [user] = await connection.query('SELECT photo_profile FROM utilisateurs WHERE id = ?', [req.session.userId]);
+        const [user] = await connection.query('SELECT img FROM utilisateurs WHERE id = ?', [req.session.userId]);
         
-        if (user[0].photo_profile) {
+        if (user[0].img) {
             // Delete photo file
-            const photoPath = path.join(__dirname, '../public', user[0].photo_profile);
+            const photoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
             if (fs.existsSync(photoPath)) {
                 fs.unlinkSync(photoPath);
             }
 
             // Update database
             await connection.query(
-                'UPDATE utilisateurs SET photo_profile = NULL WHERE id = ?',
+                'UPDATE utilisateurs SET img = NULL WHERE id = ?',
                 [req.session.userId]
             );
         }
@@ -277,94 +378,6 @@ router.delete('/remove-photo', checkAuth, async (req, res) => {
         });
     } finally {
         connection.release();
-    }
-});
-
-// Route to update profile
-router.post('/update-profile', checkAuth, async (req, res) => {
-    const userId = req.session.userId;
-    
-    try {
-        // Get form data
-        const { 
-            nom, email, telephone, adresse, 
-            gouvernorat, ville, code_postal 
-        } = req.body;
-
-        // Validate required fields
-        if (!nom || !email || !telephone) {
-            return res.status(400).json({
-                success: false,
-                error: 'الاسم والبريد الإلكتروني ورقم الهاتف مطلوبة'
-            });
-        }
-
-        // Update user data
-        const updateUserQuery = `
-            UPDATE utilisateurs 
-            SET nom = ?, 
-                email = ?,
-                telephone = ?, 
-                adresse = ?, 
-                gouvernorat = ?, 
-                ville = ?, 
-                code_postal = ?
-            WHERE id = ?
-        `;
-
-        const connection = await db.promise().getConnection();
-        try {
-            await connection.beginTransaction();
-
-            await connection.query(updateUserQuery, [
-                nom,
-                email,
-                telephone,
-                adresse || null,
-                gouvernorat || null,
-                ville || null,
-                code_postal || null,
-                userId
-            ]);
-
-            // Get updated user data
-            const [updatedUser] = await connection.query(
-                'SELECT * FROM utilisateurs WHERE id = ?',
-                [userId]
-            );
-
-            await connection.commit();
-
-            // Send response with updated user data
-            res.json({
-                success: true,
-                message: 'تم تحديث الملف الشخصي بنجاح',
-                user: {
-                    nom: updatedUser[0].nom,
-                    email: updatedUser[0].email,
-                    telephone: updatedUser[0].telephone,
-                    adresse: updatedUser[0].adresse || '',
-                    gouvernorat: updatedUser[0].gouvernorat || '',
-                    ville: updatedUser[0].ville || '',
-                    code_postal: updatedUser[0].code_postal || ''
-                }
-            });
-        } catch (error) {
-            await connection.rollback();
-            console.error('Error updating profile:', error);
-            res.status(500).json({
-                success: false,
-                error: 'حدث خطأ أثناء تحديث الملف الشخصي'
-            });
-        } finally {
-            connection.release();
-        }
-    } catch (error) {
-        console.error('Error in profile update:', error);
-        res.status(500).json({
-            success: false,
-            error: 'حدث خطأ في الخادم'
-        });
     }
 });
 
@@ -457,7 +470,7 @@ router.post('/update-profile', checkAuth, upload.fields([
                     const photoBuffer = profilePhoto.buffer;
 
                     // Update the photo in the database
-                    const updatePhotoQuery = 'UPDATE utilisateurs SET photo_profile = ? WHERE id = ?';
+                    const updatePhotoQuery = 'UPDATE utilisateurs SET img = ? WHERE id = ?';
                     db.query(updatePhotoQuery, [photoBuffer, userId], (err, result) => {
                         if (err) {
                             console.error('Error updating profile photo:', err);
@@ -478,8 +491,8 @@ router.post('/update-profile', checkAuth, upload.fields([
                             }
 
                             const userData = results[0];
-                            const photo_profile = userData.photo_profile 
-                                ? `data:image/jpeg;base64,${userData.photo_profile.toString('base64')}`
+                            const photo_profile = userData.img 
+                                ? `data:image/jpeg;base64,${userData.img.toString('base64')}`
                                 : null;
 
                             res.json({
