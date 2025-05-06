@@ -849,4 +849,53 @@ router.get('/report', checkArtisanAuth, async (req, res) => {
     }
 });
 
+// Toggle artisan availability
+router.post('/toggle-availability', checkArtisanAuth, async (req, res) => {
+    try {
+        const { available } = req.body;
+        const userId = req.session.userId;
+
+        // First get artisan_id
+        const getArtisanQuery = `SELECT id FROM artisans WHERE utilisateur_id = ?`;
+        const [artisanResult] = await db.promise().query(getArtisanQuery, [userId]);
+        
+        if (artisanResult.length === 0) {
+            return res.status(404).json({ success: false, message: 'Artisan not found' });
+        }
+
+        // Update availability
+        const updateQuery = `UPDATE artisans SET disponibilité = ? WHERE id = ?`;
+        await db.promise().query(updateQuery, [available, artisanResult[0].id]);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating availability:', error);
+        res.status(500).json({ success: false, message: 'Error updating availability' });
+    }
+});
+
+// Get artisan availability status
+router.get('/availability-status', checkArtisanAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+
+        // Get artisan availability status
+        const query = `
+            SELECT disponibilité as available 
+            FROM artisans 
+            WHERE utilisateur_id = ?
+        `;
+        const [result] = await db.promise().query(query, [userId]);
+        
+        if (result.length === 0) {
+            return res.status(404).json({ success: false, message: 'Artisan not found' });
+        }
+
+        res.json({ success: true, available: result[0].available });
+    } catch (error) {
+        console.error('Error getting availability status:', error);
+        res.status(500).json({ success: false, message: 'Error getting availability status' });
+    }
+});
+
 module.exports = router;
