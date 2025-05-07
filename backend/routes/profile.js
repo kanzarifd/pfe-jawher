@@ -6,14 +6,15 @@ const fs = require('fs');
 const { checkAuth, checkArtisanAuth } = require('../middleware/auth');
 const db = require('../config/database');
 const upload = require('../config/upload');
+const bcrypt = require('bcrypt');
 
 // Configure multer for profile photo uploads
-const uploadDir = path.join(__dirname, '../public/uploads/profiles');
-const galleryDir = path.join(__dirname, '../public/uploads/gallery');
+const uploadsDir = path.join(__dirname, '../public/uploads');
+const galleryDir = path.join(uploadsDir, 'gallery');
 
-// Ensure upload directories exist
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+// Create uploads directories if they don't exist
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
 }
 if (!fs.existsSync(galleryDir)) {
     fs.mkdirSync(galleryDir, { recursive: true });
@@ -25,7 +26,7 @@ router.use('/uploads', express.static(path.join(__dirname, '../public/uploads'))
 // Configure multer storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadDir);
+        cb(null, uploadsDir);
     },
     filename: function (req, file, cb) {
         cb(null, Date.now() + '_' + file.originalname);
@@ -43,25 +44,21 @@ const galleryStorage = multer.diskStorage({
         cb(null, galleryDir);
     },
     filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+        cb(null, `${req.session.userId}_${uniqueSuffix}${path.extname(file.originalname)}`);
     }
 });
 
-const galleryUpload = multer({
+const galleryUpload = multer({ 
     storage: galleryStorage,
-    limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB limit
-    },
-    fileFilter: function (req, file, cb) {
-        const filetypes = /jpeg|jpg|png|gif/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimetype && extname) {
-            return cb(null, true);
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JPG, PNG, GIF and WebP images are allowed'));
         }
-        cb(new Error('Only image files are allowed!'));
     }
 });
 
@@ -76,7 +73,7 @@ async function handleProfileImageUpload(req, userId, connection) {
         );
         
         if (user[0].img) {
-            const oldPhotoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
+            const oldPhotoPath = path.join(__dirname, '../public/uploads', user[0].img);
             if (fs.existsSync(oldPhotoPath)) {
                 fs.unlinkSync(oldPhotoPath);
             }
@@ -233,80 +230,104 @@ router.get('/data', checkAuth, (req, res) => {
 });
 
 // Update profile route
-router.post('/update-profile', checkAuth, uploadPhoto.single('profilePhoto'), async (req, res) => {
+router.post('/update-profile', checkAuth, upload.fields([
+    { name: 'profilePhoto', maxCount: 1 },
+    { name: 'galleryImages', maxCount: 10 }
+]), async (req, res) => {
     try {
-        const userId = req.session.userId;
+        // Get form data
+        const { 
+            fullname, email, telephone, adresse, gouvernorat, 
+            ville, code_postal, localisation, facebook, instagram, linkedin
+        } = req.body;
+        
+        console.log('Received form data:', {
+            fullname, email, telephone, adresse, gouvernorat,
+            ville, code_postal, localisation, facebook, instagram, linkedin
+        });
+        
         const connection = await db.promise().getConnection();
-
+        
         try {
             await connection.beginTransaction();
 
-            // Handle profile photo upload if present
-            const photoPath = req.file ? await handleProfileImageUpload(req, userId, connection) : null;
+            // First get current user data to preserve values
+            const [currentUser] = await connection.query(
+                'SELECT facebook, instagram, linkedin FROM utilisateurs WHERE id = ?',
+                [req.session.userId]
+            );
 
-            // Update user information in utilisateurs table
-            const updateUserQuery = `
-                UPDATE utilisateurs 
-                SET nom = ?,
-                    email = ?, 
-                    telephone = ?, 
-                    adresse = ?, 
-                    gouvernorat = ?, 
-                    ville = ?, 
-                    code_postal = ?
-                WHERE id = ?
-            `;
+            // Update user information including social media
+            const userUpdateResult = await connection.query(
+                'UPDATE utilisateurs SET nom = ?, telephone = ?, adresse = ?, gouvernorat = ?, ville = ?, code_postal = ?, facebook = ?, instagram = ?, linkedin = ? WHERE id = ?',
+                [
+                    fullname, 
+                    telephone, 
+                    adresse, 
+                    gouvernorat, 
+                    ville, 
+                    code_postal,
+                    // For social media, use current values if not provided in request
+                    facebook || currentUser[0].facebook,
+                    instagram || currentUser[0].instagram,
+                    linkedin || currentUser[0].linkedin,
+                    req.session.userId
+                ]
+            );
+            
+            console.log('User update result:', userUpdateResult);
 
-            await connection.query(updateUserQuery, [
-                req.body.fullname,
-                req.body.email,
-                req.body.telephone,
-                req.body.adresse,
-                req.body.gouvernorat,
-                req.body.ville,
-                req.body.code_postal,
-                userId
-            ]);
-
-            // If specialty is provided and user is an artisan, update artisans table
-            if (req.body.specialty) {
-                // Check if user has an artisan record
-                const [artisan] = await connection.query(
+            // Update artisan localisation if provided
+            if (localisation !== undefined && localisation !== null) {
+                console.log('Updating artisan with localisation:', localisation);
+                
+                const [artisanResult] = await connection.query(
                     'SELECT id FROM artisans WHERE utilisateur_id = ?',
-                    [userId]
+                    [req.session.userId]
                 );
 
-                if (artisan.length > 0) {
+                console.log('Existing artisan:', artisanResult);
+
+                if (artisanResult.length > 0) {
                     // Update existing artisan record
-                    await connection.query(
-                        'UPDATE artisans SET spécialité = ? WHERE utilisateur_id = ?',
-                        [req.body.specialty, userId]
+                    const artisanUpdateResult = await connection.query(
+                        'UPDATE artisans SET localisation = ? WHERE utilisateur_id = ?',
+                        [localisation, req.session.userId]
                     );
+                    console.log('Artisan update result:', artisanUpdateResult);
                 } else {
                     // Create new artisan record
-                    await connection.query(
-                        'INSERT INTO artisans (utilisateur_id, spécialité) VALUES (?, ?)',
-                        [userId, req.body.specialty]
+                    const artisanInsertResult = await connection.query(
+                        'INSERT INTO artisans (utilisateur_id, localisation) VALUES (?, ?)',
+                        [req.session.userId, localisation]
                     );
+                    console.log('Artisan insert result:', artisanInsertResult);
                 }
             }
 
             await connection.commit();
+            console.log('Transaction committed successfully');
 
-            // Send back updated user data
+            // Fetch updated data to send back
+            const [userData] = await connection.query(
+                `SELECT u.*, a.localisation 
+                 FROM utilisateurs u 
+                 LEFT JOIN artisans a ON u.id = a.utilisateur_id 
+                 WHERE u.id = ?`,
+                [req.session.userId]
+            );
+
             res.json({
                 success: true,
                 message: 'تم تحديث الملف الشخصي بنجاح',
                 user: {
-                    fullname: req.body.fullname,
-                    email: req.body.email,
-                    telephone: req.body.telephone,
-                    adresse: req.body.adresse,
-                    gouvernorat: req.body.gouvernorat,
-                    ville: req.body.ville,
-                    code_postal: req.body.code_postal,
-                    specialty: req.body.specialty,
-                    img: photoPath || undefined
+                    nom: userData[0].nom,
+                    telephone: userData[0].telephone,
+                    adresse: userData[0].adresse,
+                    gouvernorat: userData[0].gouvernorat,
+                    ville: userData[0].ville,
+                    code_postal: userData[0].code_postal,
+                    localisation: userData[0].localisation || ''
                 }
             });
 
@@ -316,6 +337,7 @@ router.post('/update-profile', checkAuth, uploadPhoto.single('profilePhoto'), as
         } finally {
             connection.release();
         }
+
     } catch (error) {
         console.error('Error updating profile:', error);
         res.status(500).json({
@@ -342,7 +364,7 @@ router.post('/upload-photo', checkAuth, uploadPhoto.single('profilePhoto'), asyn
         // Delete old profile photo if exists
         const [user] = await connection.query('SELECT img FROM utilisateurs WHERE id = ?', [req.session.userId]);
         if (user[0].img) {
-            const oldPhotoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
+            const oldPhotoPath = path.join(__dirname, '../public/uploads', user[0].img);
             if (fs.existsSync(oldPhotoPath)) {
                 fs.unlinkSync(oldPhotoPath);
             }
@@ -390,7 +412,7 @@ router.delete('/remove-photo', checkAuth, async (req, res) => {
         
         if (user[0].img) {
             // Delete photo file
-            const photoPath = path.join(__dirname, '../public/uploads/profiles', user[0].img);
+            const photoPath = path.join(__dirname, '../public/uploads', user[0].img);
             if (fs.existsSync(photoPath)) {
                 fs.unlinkSync(photoPath);
             }
@@ -420,256 +442,104 @@ router.delete('/remove-photo', checkAuth, async (req, res) => {
     }
 });
 
-// Keep existing routes (/, /data)
-router.post('/update-profile', checkAuth, upload.fields([
-    { name: 'profilePhoto', maxCount: 1 },
-    { name: 'galleryImages', maxCount: 10 }
-]), async (req, res) => {
-    const userId = req.session.userId;
-    const userRole = req.session.userRole;
-    
+// Gallery upload route
+router.post('/upload-gallery', checkAuth, upload.array('gallery[]', 10), async (req, res) => {
     try {
-        // Get form data
-        const { 
-            fullname, phone, address, governorate, city, postalCode,
-            currentPassword, newPassword,
-            profession, experience, hourlyRate, description
-        } = req.body;
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'لم يتم تحديد أي صور'
+            });
+        }
+
+        const connection = await db.promise().getConnection();
         
-        // Update basic user information without using transactions
-        const updateUserQuery = `
-            UPDATE utilisateurs 
-            SET nom = ?, telephone = ?, adresse = ?, gouvernorat = ?, ville = ?, code_postal = ?
-            WHERE id = ?
-        `;
-        
-        db.query(
-            updateUserQuery,
-            [fullname, phone, address, governorate, city, postalCode, userId],
-            async (err, result) => {
-                if (err) {
-                    console.error('Error updating user data:', err);
-                    return res.status(500).json({ 
-                        success: false, 
-                        message: 'Error updating user data: ' + err.message
-                    });
-                }
-                
-                // Handle password change if requested
-                if (currentPassword && newPassword) {
-                    try {
-                        // Verify current password
-                        const userQuery = 'SELECT mot_de_passe FROM utilisateurs WHERE id = ?';
-                        db.query(userQuery, [userId], async (err, userResults) => {
-                            if (err) {
-                                console.error('Error fetching user password:', err);
-                                return res.status(500).json({ 
-                                    success: false, 
-                                    message: 'Error verifying password'
-                                });
-                            }
-                            
-                            if (userResults.length === 0) {
-                                return res.status(404).json({
-                                    success: false,
-                                    message: 'User not found'
-                                });
-                            }
-                            
-                            const isPasswordValid = await bcrypt.compare(currentPassword, userResults[0].mot_de_passe);
-                            
-                            if (!isPasswordValid) {
-                                return res.status(400).json({
-                                    success: false,
-                                    message: 'Current password is incorrect'
-                                });
-                            }
-                            
-                            // Hash new password
-                            const hashedPassword = await bcrypt.hash(newPassword, 10);
-                            
-                            // Update password
-                            const updatePasswordQuery = 'UPDATE utilisateurs SET mot_de_passe = ? WHERE id = ?';
-                            db.query(updatePasswordQuery, [hashedPassword, userId], (err, result) => {
-                                if (err) {
-                                    console.error('Error updating password:', err);
-                                }
-                            });
-                        });
-                    } catch (error) {
-                        console.error('Password update error:', error);
-                    }
-                }
-                
-                // Handle profile photo
-                if (req.files && req.files.profilePhoto) {
-                    const profilePhoto = req.files.profilePhoto[0];
-                    
-                    // Convert the file to buffer
-                    const photoBuffer = profilePhoto.buffer;
+        try {
+            await connection.beginTransaction();
 
-                    // Update the photo in the database
-                    const updatePhotoQuery = 'UPDATE utilisateurs SET img = ? WHERE id = ?';
-                    db.query(updatePhotoQuery, [photoBuffer, userId], (err, result) => {
-                        if (err) {
-                            console.error('Error updating profile photo:', err);
-                            return res.status(500).json({
-                                success: false,
-                                message: 'Error updating profile photo'
-                            });
-                        }
+            const images = [];
+            for (const file of req.files) {
+                const [result] = await connection.query(
+                    'INSERT INTO gallery (utilisateur_id, image_url, created_at) VALUES (?, ?, NOW())',
+                    [req.session.userId, `/uploads/gallery/${file.filename}`]
+                );
 
-                        // Get the updated user data to send back
-                        const getUserQuery = 'SELECT * FROM utilisateurs WHERE id = ? ORDER BY nom ASC';
-                        db.query(getUserQuery, [userId], (err, results) => {
-                            if (err || !results.length) {
-                                return res.json({ 
-                                    success: true, 
-                                    message: 'تم تحديث الملف الشخصي بنجاح'
-                                });
-                            }
-
-                            const userData = results[0];
-                            const photo_profile = userData.img 
-                                ? `data:image/jpeg;base64,${userData.img.toString('base64')}`
-                                : null;
-
-                            res.json({
-                                success: true,
-                                message: 'تم تحديث الملف الشخصي بنجاح',
-                                user: {
-                                    ...userData,
-                                    photo_profile
-                                }
-                            });
-                        });
-                    });
-                } else {
-                    res.json({ 
-                        success: true, 
-                        message: 'تم تحديث الملف الشخصي بنجاح'
-                    });
-                }
-                
-                // Update artisan-specific information if user is an artisan
-                // Inside the update-profile route, after handling artisan profile
-                if (userRole === 'artisan') {
-                    const checkArtisanQuery = 'SELECT id FROM artisans WHERE utilisateur_id = ?';
-                    db.query(checkArtisanQuery, [userId], (err, artisanResults) => {
-                        if (err) {
-                            console.error('Error checking artisan profile:', err);
-                            return;
-                        }
-                        
-                        if (artisanResults && artisanResults.length > 0) {
-                            // Update existing artisan profile
-                            // In the update-profile route where artisan data is updated
-                            const updateArtisanQuery = `
-                                UPDATE artisans 
-                                SET spécialité = ?, 
-                                    expérience = ?, 
-                                    localisation = ?,
-                                    tarif_horaire = ?
-                                WHERE utilisateur_id = ?
-                            `;
-                            
-                            db.query(
-                                updateArtisanQuery,
-                                [profession, experience, address, hourlyRate, userId],
-                                (err, result) => {
-                                    if (err) {
-                                        console.error('Error updating artisan profile:', err);
-                                    }
-                                }
-                            );
-                        } else {
-                            // Create new artisan profile
-                            const createArtisanQuery = `
-                                INSERT INTO artisans (utilisateur_id, spécialité, expérience, localisation)
-                                VALUES (?, ?, ?, ?)
-                            `;
-                            
-                            db.query(
-                                createArtisanQuery,
-                                [userId, profession, experience, address],
-                                (err, result) => {
-                                    if (err) {
-                                        console.error('Error creating artisan profile:', err);
-                                    }
-                                }
-                            );
-                        }
-                        
-                        // Add gallery images handling
-                        // Inside the artisan profile update section where gallery images are handled
-                        if (req.files && req.files.galleryImages) {
-                            const artisanId = artisanResults[0].id;
-                            console.log('Uploading gallery images for artisan:', artisanId); // Debug log
-                            
-                            // Handle each gallery image
-                            const promises = req.files.galleryImages.map(image => {
-                                return new Promise((resolve, reject) => {
-                                    const imageFileName = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}${path.extname(image.originalname)}`;
-                                    console.log('Processing image:', imageFileName); // Debug log
-                                    
-                                    // Save file to disk
-                                    fs.writeFile(
-                                        path.join(__dirname, '..', 'public', 'uploads', 'gallery', imageFileName),
-                                        image.buffer,
-                                        async (err) => {
-                                            if (err) {
-                                                console.error('Error saving file:', err);
-                                                reject(err);
-                                                return;
-                                            }
-                                            
-                                            // Save to database with error handling
-                                            try {
-                                                const insertGalleryQuery = 'INSERT INTO gallery (artisan_id, image_path) VALUES (?, ?)';
-                                                const result = await new Promise((resolve, reject) => {
-                                                    db.query(insertGalleryQuery, [artisanId, imageFileName], (err, result) => {
-                                                        if (err) {
-                                                            console.error('Database error:', err);
-                                                            reject(err);
-                                                            return;
-                                                        }
-                                                        console.log('Image saved to database:', result); // Debug log
-                                                        resolve(result);
-                                                    });
-                                                });
-                                                resolve(result);
-                                            } catch (error) {
-                                                console.error('Error saving to database:', error);
-                                                reject(error);
-                                            }
-                                        }
-                                    );
-                                });
-                            });
-                            
-                            // Wait for all images to be processed
-                            Promise.all(promises)
-                                .then(() => {
-                                    console.log('All gallery images saved successfully');
-                                })
-                                .catch(err => {
-                                    console.error('Error processing gallery images:', err);
-                                });
-                        }
-                    });
-                }
-                
-                // Update session name if it changed
-                if (fullname && fullname !== req.session.userName) {
-                    req.session.userName = fullname;
-                }
+                images.push({
+                    id: result.insertId,
+                    url: `/uploads/gallery/${file.filename}`
+                });
             }
-        );
+
+            await connection.commit();
+
+            res.json({
+                success: true,
+                message: 'تم رفع الصور بنجاح',
+                images
+            });
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+
     } catch (error) {
-        console.error('Error updating profile:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message || 'حدث خطأ أثناء تحديث الملف الشخصي'
+        console.error('Error uploading gallery images:', error);
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ في رفع الصور'
+        });
+    }
+});
+
+// Remove gallery image route
+router.delete('/remove-gallery-image/:id', checkAuth, async (req, res) => {
+    try {
+        const imageId = req.params.id;
+        const connection = await db.promise().getConnection();
+
+        try {
+            // Get the image details first
+            const [image] = await connection.query(
+                'SELECT * FROM gallery WHERE id = ? AND utilisateur_id = ?',
+                [imageId, req.session.userId]
+            );
+
+            if (!image.length) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'الصورة غير موجودة'
+                });
+            }
+
+            // Delete the image file
+            const imagePath = path.join(__dirname, '../public', image[0].image_url);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+            }
+
+            // Delete from database
+            await connection.query(
+                'DELETE FROM gallery WHERE id = ? AND utilisateur_id = ?',
+                [imageId, req.session.userId]
+            );
+
+            res.json({
+                success: true,
+                message: 'تم حذف الصورة بنجاح'
+            });
+
+        } finally {
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Error removing gallery image:', error);
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ في حذف الصورة'
         });
     }
 });
@@ -689,8 +559,15 @@ router.get('/gallery', checkAuth, async (req, res) => {
 
         const query = 'SELECT id, image_path as filename FROM gallery WHERE artisan_id = ? ORDER BY created_at DESC';
         const [images] = await db.promise().query(query, [artisan[0].id]);
-        console.log('Gallery images:', images);
-        res.json(images);
+        
+        // Transform image paths to match the frontend expected format
+        const transformedImages = images.map(img => ({
+            ...img,
+            filename: img.filename // Keep as is since we're already aliasing image_path as filename
+        }));
+        
+        console.log('Gallery images:', transformedImages);
+        res.json(transformedImages);
     } catch (error) {
         console.error('Error fetching gallery:', error);
         res.status(500).json({ success: false, error: 'حدث خطأ في جلب معرض الصور' });
@@ -820,6 +697,156 @@ router.delete('/gallery/:filename', checkAuth, async (req, res) => {
         });
     } finally {
         connection.release();
+    }
+});
+
+// Add gallery images during profile update
+router.post('/update-profile-gallery', checkAuth, galleryUpload.array('galleryImages'), async (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'لم يتم تحديد أي صور'
+            });
+        }
+
+        const connection = await db.promise().getConnection();
+        try {
+            await connection.beginTransaction();
+
+            // Get artisan ID
+            const [artisan] = await connection.query(
+                'SELECT id FROM artisans WHERE utilisateur_id = ?',
+                [req.session.userId]
+            );
+
+            if (!artisan || artisan.length === 0) {
+                throw new Error('Artisan record not found');
+            }
+
+            const artisanId = artisan[0].id;
+            
+            // Process each image
+            const promises = req.files.map(async (file) => {
+                const imageFileName = file.filename;
+                
+                // Save to database
+                await connection.query(
+                    'INSERT INTO gallery (artisan_id, image_path) VALUES (?, ?)',
+                    [artisanId, imageFileName]
+                );
+            });
+
+            await Promise.all(promises);
+            await connection.commit();
+
+            res.json({
+                success: true,
+                message: 'تم رفع الصور بنجاح'
+            });
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Error uploading gallery images:', error);
+        
+        // Delete uploaded files if there was an error
+        if (req.files) {
+            req.files.forEach(file => {
+                fs.unlink(file.path, err => {
+                    if (err) console.error('Error deleting file:', err);
+                });
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: error.message === 'Artisan record not found' 
+                ? 'لم يتم العثور على حساب الحرفي' 
+                : 'حدث خطأ أثناء رفع الصور'
+        });
+    }
+});
+
+// Route to render password change page
+router.get('/password', checkAuth, (req, res) => {
+    res.render('profile/password', {
+        title: 'تغيير كلمة المرور - TN M3allim',
+        user: {
+            id: req.session.userId,
+            role: req.session.userRole
+        }
+    });
+});
+
+// Change password route
+router.post('/change-password', checkAuth, async (req, res) => {
+    console.log('Password change request received:', {
+        userId: req.session.userId,
+        hasCurrentPassword: !!req.body.currentPassword,
+        hasNewPassword: !!req.body.newPassword
+    });
+
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+            success: false,
+            message: 'جميع الحقول مطلوبة'
+        });
+    }
+
+    try {
+        // Get current user's password from database
+        const [user] = await db.promise().query(
+            'SELECT mot_de_passe FROM utilisateurs WHERE id = ?',
+            [req.session.userId]
+        );
+
+        if (!user || user.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'المستخدم غير موجود'
+            });
+        }
+
+        // Verify current password matches database
+        const isMatch = await bcrypt.compare(currentPassword, user[0].mot_de_passe);
+        console.log('Password match:', isMatch);
+
+        if (!isMatch) {
+            return res.status(400).json({
+                success: false,
+                message: 'كلمة المرور الحالية غير صحيحة'
+            });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password in database
+        await db.promise().query(
+            'UPDATE utilisateurs SET mot_de_passe = ? WHERE id = ?',
+            [hashedPassword, req.session.userId]
+        );
+
+        console.log('Password updated successfully');
+        res.json({
+            success: true,
+            message: 'تم تغيير كلمة المرور بنجاح'
+        });
+
+    } catch (error) {
+        console.error('Error changing password:', error);
+        res.status(500).json({
+            success: false,
+            message: 'حدث خطأ في تغيير كلمة المرور'
+        });
     }
 });
 
